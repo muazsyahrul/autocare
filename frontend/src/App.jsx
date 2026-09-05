@@ -431,17 +431,6 @@ export default function App() {
     }
   }
 
-  if (authLoading) return (
-    <div style={{
-      minHeight:"100vh", background:BG, display:"flex", alignItems:"center",
-      justifyContent:"center"
-    }}>
-      <Spinner />
-    </div>
-  );
-
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
-
   const veh          = selectedVehicle ? vehicles.find(v=>v.id===selectedVehicle) : null;
   const fuelPrice    = settings.fuel_price_per_l || "2.24";
 
