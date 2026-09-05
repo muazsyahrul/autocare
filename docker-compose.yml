@@ -6,8 +6,15 @@ services:
     environment:
       PORT: 4000
       DB_PATH: /app/data/garage.db
+
+      # AutoCare login
+      # Change these values before deploying.
+      AUTOCARE_USERNAME: admin
+      AUTOCARE_PASSWORD: CHANGE-THIS-PASSWORD
+      AUTOCARE_SESSION_DAYS: 30
+
     volumes:
-      - autocare-data:/app/data   # SQLite file persists here
+      - autocare-data:/app/data
     networks:
       - autocare-net
 
@@ -16,14 +23,14 @@ services:
     container_name: autocare-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"               # Access at http://<your-proxmox-ip>:3000
+      - "3000:80"
     depends_on:
       - backend
     networks:
       - autocare-net
 
 volumes:
-  autocare-data:                  # Named volume — survives container restarts
+  autocare-data:
 
 networks:
   autocare-net:
