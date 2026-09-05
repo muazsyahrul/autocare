@@ -35,6 +35,9 @@ db.exec(`
     cost        REAL    NOT NULL DEFAULT 0,
     workshop    TEXT    DEFAULT '',
     notes       TEXT    DEFAULT '',
+    reminder_type TEXT   NOT NULL DEFAULT 'none',
+    reminder_km INTEGER DEFAULT NULL,
+    reminder_months INTEGER DEFAULT NULL,
     created_at  TEXT    DEFAULT (datetime('now'))
   );
 
@@ -61,6 +64,10 @@ db.exec(`
     recur_value    INTEGER DEFAULT NULL,
     last_done_date TEXT    DEFAULT NULL,
     last_done_odo  INTEGER DEFAULT NULL,
+    source_service_id INTEGER DEFAULT NULL,
+    reminder_type TEXT NOT NULL DEFAULT 'legacy',
+    interval_km INTEGER DEFAULT NULL,
+    interval_months INTEGER DEFAULT NULL,
     created_at     TEXT    DEFAULT (datetime('now'))
   );
 
@@ -69,6 +76,24 @@ db.exec(`
     value TEXT NOT NULL
   );
 `);
+
+// ─── Safe migrations for existing databases ──────────────────────────────────
+function addColumnIfMissing(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+addColumnIfMissing("services", "reminder_type", "TEXT NOT NULL DEFAULT 'none'");
+addColumnIfMissing("services", "reminder_km", "INTEGER DEFAULT NULL");
+addColumnIfMissing("services", "reminder_months", "INTEGER DEFAULT NULL");
+addColumnIfMissing("reminders", "source_service_id", "INTEGER DEFAULT NULL");
+addColumnIfMissing("reminders", "reminder_type", "TEXT NOT NULL DEFAULT 'legacy'");
+addColumnIfMissing("reminders", "interval_km", "INTEGER DEFAULT NULL");
+addColumnIfMissing("reminders", "interval_months", "INTEGER DEFAULT NULL");
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_source_service ON reminders(source_service_id)`);
 
 // ─── Seed default service types ───────────────────────────────────────────────
 const defaults = [
