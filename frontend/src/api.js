@@ -12,6 +12,68 @@ async function req(method, path, body) {
   return json.data;
 }
 
+// ─── Database Backup / Restore ────────────────────────────────────────────────
+
+async function exportDatabase(password) {
+  const res = await fetch(`${BASE}/database/export`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ password }),
+  });
+
+  if (!res.ok) {
+    let message = "Database export failed";
+
+    try {
+      const json = await res.json();
+      message = json.error || message;
+    } catch {}
+
+    throw new Error(message);
+  }
+
+  const blob = await res.blob();
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "garage.db";
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  window.URL.revokeObjectURL(url);
+}
+
+async function importDatabase(file, password) {
+  if (!file) {
+    throw new Error("Please select a database file");
+  }
+
+  const res = await fetch(`${BASE}/database/import`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-AutoCare-Password": password,
+    },
+    body: file,
+  });
+
+  const json = await res.json();
+
+  if (!json.ok) {
+    throw new Error(json.error || "Database import failed");
+  }
+
+  return json.data;
+}
+
 // ─── Vehicles ─────────────────────────────────────────────────────────────────
 export const api = {
   // Authentication
@@ -48,4 +110,9 @@ export const api = {
   // Settings
   getSettings:    ()     => req("GET", "/settings"),
   updateSettings: (data) => req("PUT", "/settings", data),
+
+  // Database Backup / Restore
+  exportDatabase,
+  importDatabase,
 };
+
