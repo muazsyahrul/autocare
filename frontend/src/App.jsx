@@ -18,11 +18,6 @@ function urgencyLabel(days) {
   if (days === 0) return "Due today";
   return `${days}d left`;
 }
-function recurLabel(r) {
-  if (!r.recur_type || r.recur_type === "none") return null;
-  if (r.recur_type === "mileage")  return `Every ${r.recur_value?.toLocaleString()} km`;
-  if (r.recur_type === "schedule") return `Every ${r.recur_value} month${r.recur_value > 1 ? "s" : ""}`;
-}
 function calcNextDueDate(lastDoneDate, months) {
   if (!lastDoneDate || !months) return null;
   const d = new Date(lastDoneDate);
@@ -37,7 +32,7 @@ const CARD   = "#1e293b";
 const BORDER = "#1e3a5f";
 const ACCENT = "#38bdf8";
 const TEXT   = "#f1f5f9";
-const MUTED  = "#64748b";
+const MUTED  = "#849fc3";
 const SUBTLE = "#94a3b8";
 
 const IS = {
@@ -117,53 +112,61 @@ function ServiceTypePicker({ value, onChange, serviceTypes, onAddType }) {
   );
 }
 
-// ─── Recurring Config ─────────────────────────────────────────────────────────
-function RecurringConfig({ form, setForm }) {
-  const active = form.recur_type || "none";
-  const modes  = [
-    { val:"none",     label:"One-time",  desc:null },
-    { val:"mileage",  label:"Mileage",   desc:"Every X km" },
-    { val:"schedule", label:"Schedule",  desc:"Every X months" },
+// ─── Service Reminder Config ──────────────────────────────────────────────────
+function ServiceReminderConfig({ form, setForm }) {
+  const active = form.reminder_type || "none";
+  const modes = [
+    { val:"none",     label:"No reminder", desc:"One-time service" },
+    { val:"mileage",  label:"Mileage",    desc:"After X KM" },
+    { val:"schedule", label:"Time",       desc:"After X months" },
+    { val:"both",     label:"Either",      desc:"Whichever first" },
   ];
+  const km = parseInt(form.reminder_km) || 0;
+  const months = parseInt(form.reminder_months) || 0;
+  const odo = parseInt(form.odometer) || 0;
+  const date = form.date;
+  const nextOdo = km && odo ? odo + km : null;
+  const nextDate = months && date ? calcNextDueDate(date, months) : null;
+
   return (
     <div style={{ background:"#0f172a", borderRadius:10, padding:14, border:"1px solid #334155", marginBottom:14 }}>
-      <div style={{ fontSize:12, color:SUBTLE, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>🔁 Recurrence</div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom: active!=="none" ? 14 : 0 }}>
+      <div style={{ fontSize:12, color:SUBTLE, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:10 }}>Next Reminder</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom: active!=="none" ? 14 : 0 }}>
         {modes.map(m => (
-          <button key={m.val} onClick={() => setForm(f => ({ ...f, recur_type:m.val }))}
-            style={{ padding:"8px 6px", borderRadius:8, border: active===m.val ? "none" : "1px solid #334155", cursor:"pointer", textAlign:"center",
-              background: active===m.val ? ACCENT : CARD, color: active===m.val ? "#0a0f1e" : MUTED }}>
-            <div style={{ fontSize:13, fontWeight:700 }}>{m.label}</div>
-            {m.desc && <div style={{ fontSize:10, marginTop:2, opacity:0.75 }}>{m.desc}</div>}
+          <button key={m.val} onClick={() => setForm(f => ({ ...f, reminder_type:m.val }))}
+            style={{ padding:"9px 6px", borderRadius:8, border:active===m.val ? "none" : "1px solid #334155", cursor:"pointer", textAlign:"center",
+              background:active===m.val ? ACCENT : CARD, color:active===m.val ? "#0a0f1e" : MUTED }}>
+            <div style={{ fontSize:12, fontWeight:700 }}>{m.label}</div>
+            <div style={{ fontSize:10, marginTop:2, opacity:0.75 }}>{m.desc}</div>
           </button>
         ))}
       </div>
-      {active==="mileage" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-          <div>
-            <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>Every (km)</label>
-            <input type="number" style={IS} placeholder="e.g. 5000" value={form.recur_value||""}
-              onChange={e => setForm(f => ({ ...f, recur_value:e.target.value }))}/>
-          </div>
-          <div>
-            <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>Last done (odometer)</label>
-            <input type="number" style={IS} placeholder="e.g. 45000" value={form.last_done_odo||""}
-              onChange={e => setForm(f => ({ ...f, last_done_odo:e.target.value }))}/>
-          </div>
+
+      {(active==="mileage" || active==="both") && (
+        <div style={{ marginBottom:active==="both" ? 10 : 0 }}>
+          <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>Next after (KM)</label>
+          <input type="number" min="1" style={IS} placeholder="e.g. 10000" value={form.reminder_km||""}
+            onChange={e=>setForm(f=>({ ...f, reminder_km:e.target.value }))}/>
+          {nextOdo && <div style={{ color:"#22c55e", fontSize:12, marginTop:6 }}>Next at <strong>{nextOdo.toLocaleString()} KM</strong></div>}
+          {active!=="both" && odo===0 && <div style={{ color:MUTED, fontSize:11, marginTop:5 }}>Enter the service odometer above to calculate the next KM.</div>}
         </div>
       )}
-      {active==="schedule" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-          <div>
-            <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>Every (months)</label>
-            <input type="number" style={IS} placeholder="e.g. 6" value={form.recur_value||""}
-              onChange={e => setForm(f => ({ ...f, recur_value:e.target.value }))}/>
-          </div>
-          <div>
-            <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>Last done (date)</label>
-            <input type="date" style={IS} value={form.last_done_date||""}
-              onChange={e => setForm(f => ({ ...f, last_done_date:e.target.value }))}/>
-          </div>
+
+      {(active==="schedule" || active==="both") && (
+        <div>
+          <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>Next after (months)</label>
+          <input type="number" min="1" style={IS} placeholder="e.g. 6" value={form.reminder_months||""}
+            onChange={e=>setForm(f=>({ ...f, reminder_months:e.target.value }))}/>
+          {nextDate && <div style={{ color:"#22c55e", fontSize:12, marginTop:6 }}>Next on <strong>{nextDate}</strong></div>}
+          {!date && <div style={{ color:MUTED, fontSize:11, marginTop:5 }}>Enter the service date above to calculate the next date.</div>}
+        </div>
+      )}
+
+      {active==="both" && (nextOdo || nextDate) && (
+        <div style={{ background:"#38bdf811", border:"1px solid #38bdf833", borderRadius:8, padding:"9px 10px", marginTop:10, fontSize:12, color:SUBTLE }}>
+          The reminder will trigger when <strong style={{ color:TEXT }}>either condition</strong> is reached first.
+          {nextOdo && <div style={{ marginTop:3 }}>KM: <strong style={{ color:TEXT }}>{nextOdo.toLocaleString()} KM</strong></div>}
+          {nextDate && <div style={{ marginTop:3 }}>Date: <strong style={{ color:TEXT }}>{nextDate}</strong></div>}
         </div>
       )}
     </div>
@@ -175,13 +178,14 @@ function FuelForm({ form, setForm, defaultPricePerL }) {
   function handleCalc(field, val) {
     const next = { ...form, [field]: val };
     const L = parseFloat(next.liters)      || 0;
-    const P = parseFloat(next.price_per_l) || 0;
+    const P = parseFloat(next.price_per_l) || parseFloat(defaultPricePerL) || 0;
     const C = parseFloat(next.cost)        || 0;
-    if (field==="liters" || field==="price_per_l") {
+    if (field==="liters") {
       if (L && P) next.cost = (L * P).toFixed(2);
     } else if (field==="cost") {
-      if (C && L) next.price_per_l = (C / L).toFixed(4);
-      else if (C && P) next.liters = (C / P).toFixed(2);
+      if (C && P) next.liters = (C / P).toFixed(2);
+    } else if (field==="price_per_l") {
+      if (L && P) next.cost = (L * P).toFixed(2);
     }
     setForm(next);
   }
@@ -191,7 +195,7 @@ function FuelForm({ form, setForm, defaultPricePerL }) {
         <FF label="Date">
           <input type="date" style={IS} value={form.date||""} onChange={e => setForm(f => ({ ...f, date:e.target.value }))}/>
         </FF>
-        <FF label="Odometer (km)">
+        <FF label="Odometer (KM)">
           <input type="number" style={IS} placeholder="e.g. 47000" value={form.odometer||""} onChange={e => setForm(f => ({ ...f, odometer:e.target.value }))}/>
         </FF>
       </div>
@@ -205,7 +209,7 @@ function FuelForm({ form, setForm, defaultPricePerL }) {
           </div>
           <div>
             <label style={{ display:"block", color:MUTED, fontSize:11, marginBottom:5 }}>RM / Litre</label>
-            <input type="number" style={IS} placeholder={defaultPricePerL||"0.00"} value={form.price_per_l||""}
+            <input type="number" style={IS} placeholder={defaultPricePerL||"0.00"} value={form.price_per_l ?? defaultPricePerL ?? ""}
               onChange={e => handleCalc("price_per_l", e.target.value)}/>
           </div>
           <div>
@@ -214,7 +218,7 @@ function FuelForm({ form, setForm, defaultPricePerL }) {
               onChange={e => handleCalc("cost", e.target.value)}/>
           </div>
         </div>
-        <div style={{ fontSize:11, color:"#475569", marginTop:8 }}>Fill any two — the third calculates automatically.</div>
+        <div style={{ fontSize:11, color:"#475569", marginTop:8 }}>RM / Litre uses your saved default. Enter Litres or Total; you can edit RM / Litre anytime.</div>
       </div>
       <FF label="Tank">
         <select style={IS} value={form.full!==undefined ? (form.full ? "true" : "false") : "true"}
@@ -234,7 +238,7 @@ function FuelChart({ data }) {
   const effs = [];
   for (let i=1; i<pts.length; i++) {
     const dist = pts[i].odometer - pts[i-1].odometer;
-    if (dist>0 && pts[i].full) effs.push({ eff:(pts[i].liters/dist)*100 });
+    if (dist>0 && pts[i].full) effs.push({ eff:dist/pts[i].liters });
   }
   if (!effs.length) return <div style={{ color:MUTED, fontSize:13 }}>Not enough full tank data</div>;
   const maxE=Math.max(...effs.map(e=>e.eff)), minE=Math.min(...effs.map(e=>e.eff));
@@ -256,7 +260,7 @@ function FuelChart({ data }) {
         {effs.map((e,i) => <circle key={i} cx={pad+i*xStep} cy={yS(e.eff)} r="3" fill={ACCENT}/>)}
       </svg>
       <div style={{ color:SUBTLE, fontSize:11, marginTop:4 }}>
-        Avg: {(effs.reduce((s,e)=>s+e.eff,0)/effs.length).toFixed(1)} L/100km
+        Avg: {(effs.reduce((s,e)=>s+e.eff,0)/effs.length).toFixed(1)} KM/L
       </div>
     </div>
   );
@@ -279,6 +283,8 @@ export default function App() {
   const [filterVehicle,   setFilterVehicle]   = useState("All");
   const [form,            setForm]            = useState({});
   const [saving,          setSaving]          = useState(false);
+  const [confirmVehicle,   setConfirmVehicle]   = useState(null);
+  const [confirmService,   setConfirmService]   = useState(null);
 
   // ── Load all data on mount ──
   const loadAll = useCallback(async () => {
@@ -300,9 +306,11 @@ export default function App() {
   const fuelPrice    = settings.fuel_price_per_l || "2.24";
 
   const upcomingReminders = useMemo(() =>
-    reminders.map(r => ({ ...r, days:getDaysUntil(r.due_date), vehicle:vehicles.find(v=>v.id===r.vehicle_id) }))
-      .filter(r => r.days < 9999)
-      .sort((a,b)=>a.days-b.days).slice(0,6),
+    reminders
+      .map(r => ({ ...r, vehicle:vehicles.find(v=>v.id===r.vehicle_id) }))
+      .filter(r => !getReminderStatus(r).overdue)
+      .sort((a,b)=>reminderUrgency(a)-reminderUrgency(b))
+      .slice(0,6),
     [reminders, vehicles]);
 
   const filteredServices = useMemo(() =>
@@ -311,7 +319,12 @@ export default function App() {
       .filter(s => filterType==="All"    || s.type===filterType),
     [services, filterType, filterVehicle]);
 
-  function openModal(type, extra={}) { setForm({ recur_type:"none", ...extra }); setModal(type); }
+  function openModal(type, extra={}) {
+    const nextForm = { reminder_type:"none", ...extra };
+    if (type === "fuel" && !extra.price_per_l) nextForm.price_per_l = fuelPrice;
+    setForm(nextForm);
+    setModal(type);
+  }
   function closeModal() { setModal(null); setForm({}); setEditTarget(null); setSaving(false); }
 
   async function withSave(fn) {
@@ -323,8 +336,45 @@ export default function App() {
   // ── CRUD handlers ──
   const saveService = () => withSave(async () => {
     if (!form.type||!form.date||!form.vehicle_id) throw new Error("Vehicle, type and date are required");
-    await api.createService({ vehicle_id:parseInt(form.vehicle_id), type:form.type, date:form.date, odometer:parseInt(form.odometer)||0, cost:parseFloat(form.cost)||0, workshop:form.workshop||"", notes:form.notes||"" });
+    const reminderType = form.reminder_type || "none";
+    const reminderKm = (reminderType === "mileage" || reminderType === "both") ? parseInt(form.reminder_km)||null : null;
+    const reminderMonths = (reminderType === "schedule" || reminderType === "both") ? parseInt(form.reminder_months)||null : null;
+    if (reminderType === "mileage" && !reminderKm) throw new Error("Enter the next KM interval or choose No reminder");
+    if (reminderType === "schedule" && !reminderMonths) throw new Error("Enter the next month interval or choose No reminder");
+    if (reminderType === "both" && !reminderKm && !reminderMonths) throw new Error("Enter a KM or month interval, or choose No reminder");
+    await api.createService({ vehicle_id:parseInt(form.vehicle_id), type:form.type, date:form.date, odometer:parseInt(form.odometer)||0, cost:parseFloat(form.cost)||0, workshop:form.workshop||"", notes:form.notes||"", reminder_type:reminderType, reminder_km:reminderKm, reminder_months:reminderMonths });
   });
+
+  const saveServiceEdit = () => withSave(async () => {
+    if (!form.type||!form.date) throw new Error("Type and date are required");
+    const reminderType = form.reminder_type || "none";
+    const reminderKm = (reminderType === "mileage" || reminderType === "both") ? parseInt(form.reminder_km)||null : null;
+    const reminderMonths = (reminderType === "schedule" || reminderType === "both") ? parseInt(form.reminder_months)||null : null;
+    if (reminderType === "mileage" && !reminderKm) throw new Error("Enter the next KM interval or choose No reminder");
+    if (reminderType === "schedule" && !reminderMonths) throw new Error("Enter the next month interval or choose No reminder");
+    if (reminderType === "both" && !reminderKm && !reminderMonths) throw new Error("Enter a KM or month interval, or choose No reminder");
+    await api.updateService(editTarget, { type:form.type, date:form.date, odometer:parseInt(form.odometer)||0, cost:parseFloat(form.cost)||0, workshop:form.workshop||"", notes:form.notes||"", reminder_type:reminderType, reminder_km:reminderKm, reminder_months:reminderMonths });
+  });
+
+  function openServiceEdit(s) {
+    setEditTarget(s.id);
+    setForm({ vehicle_id:String(s.vehicle_id), type:s.type, date:s.date, odometer:String(s.odometer||""), cost:String(s.cost||""), workshop:s.workshop||"", notes:s.notes||"", reminder_type:s.reminder_type||"none", reminder_km:s.reminder_km?String(s.reminder_km):"", reminder_months:s.reminder_months?String(s.reminder_months):"" });
+    setModal("service-edit");
+  }
+
+  async function removeService(s) {
+    if (!s) return;
+    try {
+      setSaving(true);
+      await api.deleteService(s.id);
+      await loadAll();
+      setConfirmService(null);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const saveFuel = () => withSave(async () => {
     if (!form.date||!form.vehicle_id) throw new Error("Vehicle and date are required");
@@ -341,35 +391,36 @@ export default function App() {
     setModal("fuel-edit");
   }
 
-  const saveReminder = () => withSave(async () => {
-    if (!form.type||!form.vehicle_id) throw new Error("Vehicle and type are required");
-    const rt = form.recur_type||"none";
-    let due_date = form.due_date||"";
-    let due_odometer = form.due_odometer ? parseInt(form.due_odometer) : null;
-    if (rt==="schedule" && form.last_done_date && form.recur_value)
-      due_date = calcNextDueDate(form.last_done_date, parseInt(form.recur_value)) || due_date;
-    if (rt==="mileage" && form.last_done_odo && form.recur_value)
-      due_odometer = parseInt(form.last_done_odo) + parseInt(form.recur_value);
-    if (!due_date) throw new Error("Due date is required");
-    await api.createReminder({ vehicle_id:parseInt(form.vehicle_id), type:form.type, due_date, due_odometer, notes:form.notes||"", recur_type:rt, recur_value:form.recur_value?parseInt(form.recur_value):null, last_done_date:form.last_done_date||null, last_done_odo:form.last_done_odo?parseInt(form.last_done_odo):null });
-  });
-
-  const markDone = (r) => withSave(async () => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    if (!r.recur_type||r.recur_type==="none") {
-      await api.updateReminder(r.id, { ...r, due_date:"9999-12-31" });
-      return;
-    }
-    let due_date = r.due_date, due_odometer = r.due_odometer;
-    if (r.recur_type==="schedule") due_date = calcNextDueDate(todayStr, r.recur_value)||r.due_date;
-    if (r.recur_type==="mileage"&&r.due_odometer) due_odometer = r.due_odometer + r.recur_value;
-    await api.updateReminder(r.id, { ...r, due_date, due_odometer, last_done_date:todayStr, last_done_odo:r.due_odometer });
-  });
-
   const saveVehicle = () => withSave(async () => {
     if (!form.name||!form.plate) throw new Error("Name and plate are required");
-    await api.createVehicle({ name:form.name, plate:form.plate, year:parseInt(form.year)||2020, color:form.color||"#6366f1" });
+    const data = { name:form.name.trim(), plate:form.plate.trim(), year:parseInt(form.year)||2020, color:form.color||"#6366f1" };
+    if (editTarget) await api.updateVehicle(editTarget, data);
+    else await api.createVehicle(data);
   });
+
+  function openVehicleEdit(v) {
+    setEditTarget(v.id);
+    setForm({ name:v.name, plate:v.plate, year:String(v.year), color:v.color||"#6366f1" });
+    setModal("vehicle-edit");
+  }
+
+  async function removeVehicle(v) {
+    if (!v) return;
+    try {
+      setSaving(true);
+      await api.deleteVehicle(v.id);
+      await loadAll();
+      if (selectedVehicle === v.id) {
+        setSelectedVehicle(null);
+        setTab("vehicles");
+      }
+      setConfirmVehicle(null);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const addServiceType = async (name) => {
     await api.createServiceType(name);
@@ -392,8 +443,51 @@ export default function App() {
   const totalSpentYear = [...services, ...fuels]
     .filter(x => x.date?.startsWith(new Date().getFullYear().toString()))
     .reduce((s,x)=>s+x.cost,0);
-  const overdueCount = reminders.filter(r=>getDaysUntil(r.due_date)<0).length;
-  const soonCount    = reminders.filter(r=>{ const d=getDaysUntil(r.due_date); return d>=0&&d<=30; }).length;
+  const overdueCount = reminders.filter(r=>getReminderStatus(r).overdue).length;
+  const soonCount    = reminders.filter(r=>{ const st=getReminderStatus(r); return !st.overdue && ((r.due_date!=="9999-12-31" && st.days>=0&&st.days<=30) || (st.kmLeft!==null && st.kmLeft>=0 && st.kmLeft<=5000)); }).length;
+  // Fleet fuel economy in KM/L, calculated from full-tank fill-ups.
+  const fleetFuelEconomy = useMemo(() => {
+    let totalDistance = 0;
+    let totalLiters = 0;
+
+    vehicles.forEach(v => {
+      const pts = fuels
+        .filter(f => f.vehicle_id === v.id && f.full)
+        .sort((a,b) => new Date(a.date)-new Date(b.date));
+
+      for (let i=1; i<pts.length; i++) {
+        const distance = Number(pts[i].odometer) - Number(pts[i-1].odometer);
+        const liters = Number(pts[i].liters);
+        if (distance > 0 && liters > 0) {
+          totalDistance += distance;
+          totalLiters += liters;
+        }
+      }
+    });
+
+    return totalLiters > 0 ? totalDistance / totalLiters : null;
+  }, [vehicles, fuels]);
+
+  const overdueReminders = useMemo(() =>
+    reminders
+      .map(r => ({ ...r, vehicle:vehicles.find(v=>v.id===r.vehicle_id) }))
+      .filter(r => getReminderStatus(r).overdue)
+      .sort((a,b)=>reminderUrgency(a)-reminderUrgency(b)),
+    [reminders, vehicles]);
+
+  const dueSoonReminders = useMemo(() =>
+    reminders
+      .map(r => ({ ...r, vehicle:vehicles.find(v=>v.id===r.vehicle_id) }))
+      .filter(r => {
+        const st = getReminderStatus(r);
+        return !st.overdue &&
+          ((r.due_date!=="9999-12-31" && st.days>=0 && st.days<=30) ||
+           (st.kmLeft!==null && st.kmLeft>=0 && st.kmLeft<=5000));
+      })
+      .sort((a,b)=>reminderUrgency(a)-reminderUrgency(b)),
+    [reminders, vehicles]
+  );
+
 
   // ── Nav ──
   const tabBtn = (id, icon, label) => (
@@ -403,32 +497,148 @@ export default function App() {
     </button>
   );
 
-  // ── Reminder Card ──
-  const ReminderCard = ({ r, showDone=false }) => {
+  // ── Reminder status ──
+  function getReminderStatus(r) {
+    const vehicle = r.vehicle || vehicles.find(v=>v.id===r.vehicle_id);
+    const currentOdo = Number(r.current_odometer) || Number(vehicle?.last_odometer) || 0;
+    const dueOdo = Number(r.due_odometer) || null;
+    const odoReached = dueOdo !== null && currentOdo >= dueOdo;
     const days = getDaysUntil(r.due_date);
-    if (days > 9998) return null;
+    const dateReached = r.due_date && r.due_date !== "9999-12-31" && days <= 0;
+    const overdue = odoReached || dateReached;
+    const kmLeft = dueOdo !== null && currentOdo > 0 ? dueOdo - currentOdo : null;
+    return { vehicle, currentOdo, days, dueOdo, kmLeft, odoReached, dateReached, overdue };
+  }
+
+  function reminderBadge(r) {
+    const st = getReminderStatus(r);
+    if (st.overdue) {
+      if (st.odoReached && st.dateReached) return "Overdue";
+      if (st.odoReached) return `${Math.abs(st.kmLeft).toLocaleString()} KM overdue`;
+      return `${Math.abs(st.days)}d overdue`;
+    }
+    if (r.due_odometer && st.kmLeft !== null && st.kmLeft >= 0 && (!r.due_date || r.due_date === "9999-12-31")) return `${st.kmLeft.toLocaleString()} KM left`;
+    if (r.due_odometer && st.kmLeft !== null && st.kmLeft >= 0 && r.due_date !== "9999-12-31") return `${st.kmLeft.toLocaleString()} KM / ${st.days}d`;
+    if (r.due_date === "9999-12-31") return "Mileage due";
+    return urgencyLabel(st.days);
+  }
+
+  function reminderUrgency(r) {
+    const st = getReminderStatus(r);
+    if (st.overdue) return -1;
+    if (st.days <= 30 && r.due_date !== "9999-12-31") return st.days;
+    if (st.kmLeft !== null && st.kmLeft <= 5000) return Math.max(1, st.days);
+    return Math.max(31, st.days);
+  }
+
+  // ── Reminder Card ──
+  const ReminderCard = ({ r }) => {
+    const st = getReminderStatus(r);
+    const days = st.days;
+    if (days > 9998 && st.dueOdo === null) return null;
+    const badge = reminderBadge(r);
+    const color = st.overdue ? "#ef4444"
+      : (st.days <= 14 || (st.kmLeft !== null && st.kmLeft <= 2000)) ? "#f97316"
+      : (st.days <= 30 || (st.kmLeft !== null && st.kmLeft <= 5000)) ? "#eab308"
+      : "#22c55e";
     return (
-      <div style={{ background:CARD, borderRadius:14, padding:"12px 14px", border:`1px solid ${urgencyColor(days)}44`, marginBottom:8 }}>
+      <div style={{ background:CARD, borderRadius:14, padding:"12px 14px", border:`1px solid ${color}44`, marginBottom:8 }}>
         <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
-          <div style={{ width:8, height:8, borderRadius:"50%", background:urgencyColor(days), flexShrink:0, marginTop:6 }}/>
+          <div style={{ width:8, height:8, borderRadius:"50%", background:color, flexShrink:0, marginTop:6 }}/>
           <div style={{ flex:1 }}>
             <div style={{ fontWeight:700, fontSize:14, display:"flex", alignItems:"center", flexWrap:"wrap", gap:6 }}>
               {r.type}
-              {recurLabel(r) && <span style={{ fontSize:11, color:ACCENT, background:ACCENT+"22", borderRadius:5, padding:"2px 7px" }}>↻ {recurLabel(r)}</span>}
+              {st.vehicle?.name && (
+                 <span style={{
+                   fontSize:12,
+                   color:ACCENT,
+                   background:ACCENT+"22",
+                   borderRadius:5,
+                   padding:"3px 8px",
+                   lineHeight:1.2,
+                   fontWeight:600
+                 }}>
+                   {st.vehicle.name}
+                 </span>
+               )}
+              {r.reminder_type && r.reminder_type!=="none" && r.reminder_type!=="legacy" && (
+                <span style={{ fontSize:10, color:MUTED, background:MUTED+"22", borderRadius:5, padding:"2px 7px" }}>
+                  {r.reminder_type==="both" ? "KM or time" : r.reminder_type==="mileage" ? "Mileage" : "Time"}
+                </span>
+              )}
             </div>
-            <div style={{ fontSize:12, color:MUTED, marginTop:2 }}>{r.vehicle?.name} · Due {r.due_date}</div>
-            {r.due_odometer && <div style={{ fontSize:12, color:MUTED }}>or at {r.due_odometer.toLocaleString()} km</div>}
+            <div style={{ fontSize:12, color:MUTED, marginTop:2 }}>{r.due_date!=="9999-12-31" ? `Due ${r.due_date}` : ""}</div>
+            {r.due_odometer && <div style={{ fontSize:12, color:MUTED }}>{st.currentOdo ? `Current ${st.currentOdo.toLocaleString()} KM · ` : ""}Due at {r.due_odometer.toLocaleString()} KM</div>}
+            {r.interval_km && <div style={{ fontSize:11, color:SUBTLE }}>Next interval: {r.interval_km.toLocaleString()} KM</div>}
+            {r.interval_months && <div style={{ fontSize:11, color:SUBTLE }}>Next interval: {r.interval_months} month{r.interval_months>1?"s":""}</div>}
             {r.notes && <div style={{ fontSize:12, color:SUBTLE, marginTop:4 }}>{r.notes}</div>}
           </div>
-          <div style={{ fontSize:12, fontWeight:700, color:urgencyColor(days), background:urgencyColor(days)+"22", borderRadius:8, padding:"3px 8px", flexShrink:0 }}>{urgencyLabel(days)}</div>
+          <div style={{ fontSize:12, fontWeight:700, color, background:color+"22", borderRadius:8, padding:"3px 8px", flexShrink:0 }}>{badge}</div>
         </div>
-        {showDone && (
-          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:10 }}>
-            <button onClick={()=>markDone(r)} style={{ background:"#22c55e22", border:"none", color:"#22c55e", borderRadius:8, padding:"6px 14px", cursor:"pointer", fontWeight:700, fontSize:12 }}>
-              ✓ Mark Done{r.recur_type&&r.recur_type!=="none" ? " & Reschedule" : ""}
-            </button>
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:10 }}>
+          <button onClick={()=>openModal("service", {
+              vehicle_id:String(r.vehicle_id),
+              type:r.type,
+              date:new Date().toISOString().split("T")[0],
+              odometer:st.currentOdo ? String(st.currentOdo) : ""
+            })}
+            style={{ background:"#22c55e22", border:"none", color:"#22c55e", borderRadius:8, padding:"6px 12px", cursor:"pointer", fontWeight:700, fontSize:12 }}>
+            + Record Service
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Compact dashboard reminder card ──
+  const DashboardReminderCard = ({ r }) => {
+    const st = getReminderStatus(r);
+    const badge = reminderBadge(r);
+    const color = st.overdue ? "#ef4444" : "#f97316";
+
+    return (
+      <div style={{
+        background:CARD,
+        borderRadius:10,
+        padding:"10px 12px",
+        border:`1px solid ${BORDER}`,
+        marginBottom:7,
+        display:"flex",
+        alignItems:"center",
+        gap:10
+      }}>
+        <div style={{
+          width:7,
+          height:7,
+          borderRadius:"50%",
+          background:color,
+          flexShrink:0
+        }}/>
+        <div style={{ flex:1, minWidth:0, display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+          <div style={{ fontSize:14, fontWeight:800 }}>
+            {r.type}
           </div>
-        )}
+           <div style={{
+             fontSize:12,
+             color:ACCENT,
+             background:ACCENT+"22",
+             borderRadius:5,
+             padding:"3px 8px",
+             lineHeight:1.2,
+             fontWeight:600
+           }}>
+             {st.vehicle?.name || "Unknown vehicle"}
+          </div>
+        </div>
+        <div style={{
+          fontSize:11,
+          fontWeight:700,
+          color:color,
+          whiteSpace:"nowrap",
+          flexShrink:0
+        }}>
+          {badge}
+        </div>
       </div>
     );
   };
@@ -438,7 +648,7 @@ export default function App() {
     <div style={{ background:CARD, borderRadius:12, padding:"12px 14px", border:`1px solid ${BORDER}`, marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
       <div style={{ flex:1 }}>
         <div style={{ fontWeight:600 }}>{f.liters}L · RM {parseFloat(f.cost).toFixed(2)} <span style={{ color:MUTED, fontSize:12, fontWeight:400 }}>({parseFloat(f.price_per_l).toFixed(2)}/L)</span></div>
-        <div style={{ fontSize:12, color:MUTED }}>{f.date} · {f.odometer.toLocaleString()} km</div>
+        <div style={{ fontSize:12, color:MUTED }}>{f.date} · {f.odometer.toLocaleString()} KM</div>
       </div>
       <div style={{ fontSize:11, color:f.full?"#22c55e":MUTED }}>{f.full?"⛽ Full":"Partial"}</div>
       <button onClick={()=>openFuelEdit(f)} style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:12, fontWeight:600, flexShrink:0 }}>Edit</button>
@@ -463,8 +673,7 @@ export default function App() {
         <div style={{ display:"flex", gap:8 }}>
           {tab==="history"   && <Btn label="+ Service"  onClick={()=>openModal("service")}/>}
           {tab==="fuel"      && <Btn label="+ Fill Up"  onClick={()=>openModal("fuel")}/>}
-          {tab==="reminders" && <Btn label="+ Reminder" onClick={()=>openModal("reminder")}/>}
-          {tab==="vehicles"  && <Btn label="+ Car"  onClick={()=>openModal("vehicle")}/>}
+          {tab==="vehicles"  && <Btn label="+ Vehicle"  onClick={()=>openModal("vehicle")}/>}
         </div>
       </div>
 
@@ -473,14 +682,20 @@ export default function App() {
         {/* ── DASHBOARD ── */}
         {tab==="dashboard" && (
           <div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }}>
+            {/* Main dashboard cards: Vehicles | Fuel Economy / Overdue | Due Soon */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
               {[
-                { label:"Vehicles",   value:vehicles.length,                   icon:"🚗", color:ACCENT },
-                { label:`Spent ${new Date().getFullYear()}`, value:`RM ${totalSpentYear.toFixed(0)}`, icon:"💰", color:"#a78bfa" },
-                { label:"Overdue",    value:overdueCount,                      icon:"🔴", color:"#ef4444" },
-                { label:"Due Soon",   value:soonCount,                         icon:"⚠️", color:"#f97316" },
+                { label:"Vehicles", value:vehicles.length, icon:"🚗", color:ACCENT },
+                { label:"Fuel Economy", value:fleetFuelEconomy ? `${fleetFuelEconomy.toFixed(1)} KM/L` : "—", icon:"⛽", color:"#22c55e" },
+                { label:"Overdue", value:overdueCount, icon:"🔴", color:"#ef4444" },
+                { label:"Due Soon", value:soonCount, icon:"⚠️", color:"#f97316" },
               ].map(c => (
-                <div key={c.label} style={{ background:CARD, borderRadius:14, padding:16, border:`1px solid ${BORDER}` }}>
+                <div key={c.label} style={{
+                  background:CARD,
+                  borderRadius:14,
+                  padding:16,
+                  border:`1px solid ${BORDER}`
+                }}>
                   <div style={{ fontSize:22 }}>{c.icon}</div>
                   <div style={{ fontSize:24, fontWeight:800, color:c.color, marginTop:6 }}>{c.value}</div>
                   <div style={{ fontSize:12, color:MUTED, fontWeight:600 }}>{c.label}</div>
@@ -488,30 +703,77 @@ export default function App() {
               ))}
             </div>
 
+            {/* Small, unobtrusive fleet summary */}
+            <div style={{
+              fontSize:10,
+              color:"#64748b",
+              textAlign:"center",
+              margin:"2px 0 20px",
+              letterSpacing:"0.01em"
+            }}>
+              FLEET SUMMARY&nbsp;&nbsp;
+              RM {totalSpentYear.toFixed(0)} spent · {services.length} services · {fuels.length} fuel-ups
+            </div>
+
+            {/* Your Vehicles */}
             <SecTitle t="Your Vehicles"/>
-            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:22 }}>
               {vehicles.map(v => {
                 const lastOdo = v.last_odometer;
-                const vs      = services.filter(s=>s.vehicle_id===v.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-                const overdue = reminders.filter(r=>r.vehicle_id===v.id&&getDaysUntil(r.due_date)<0).length;
+                const vs = services.filter(s=>s.vehicle_id===v.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+                const vehicleOverdue = reminders.filter(r=>r.vehicle_id===v.id&&getReminderStatus(r).overdue).length;
+                const vehicleSoon = reminders.filter(r=>{
+                  if (r.vehicle_id!==v.id) return false;
+                  const st=getReminderStatus(r);
+                  return !st.overdue &&
+                    ((r.due_date!=="9999-12-31" && st.days>=0 && st.days<=30) ||
+                     (st.kmLeft!==null && st.kmLeft>=0 && st.kmLeft<=5000));
+                }).length;
+
                 return (
                   <div key={v.id} onClick={()=>{ setSelectedVehicle(v.id); setTab("vehicle-detail"); }}
                     style={{ background:CARD, borderRadius:14, padding:"14px 16px", border:`1px solid ${BORDER}`, cursor:"pointer", display:"flex", alignItems:"center", gap:14 }}>
                     <div style={{ width:48, height:48, borderRadius:12, background:v.color+"22", border:`2px solid ${v.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🚘</div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontWeight:700, fontSize:15, marginBottom:2 }}>{v.name}</div>
-                      <div style={{ fontSize:12, color:MUTED }}>{v.plate} · {v.year}{lastOdo?` · ${lastOdo.toLocaleString()} km`:""}</div>
+                      <div style={{ fontSize:12, color:MUTED }}>{v.plate} · {v.year}{lastOdo?` · ${lastOdo.toLocaleString()} KM`:""}</div>
                       {vs[0] && <div style={{ fontSize:11, color:SUBTLE, marginTop:2 }}>Last: {vs[0].type} · {vs[0].date}</div>}
                     </div>
-                    {overdue>0 && <div style={{ background:"#ef444422", color:"#ef4444", borderRadius:8, padding:"3px 8px", fontSize:12, fontWeight:700 }}>{overdue} overdue</div>}
+
+                    <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+                      {vehicleOverdue>0 && <div style={{ background:"#ef444422", color:"#ef4444", borderRadius:8, padding:"3px 8px", fontSize:11, fontWeight:700 }}>{vehicleOverdue} overdue</div>}
+                      {vehicleSoon>0 && <div style={{ background:"#f9731622", color:"#f97316", borderRadius:8, padding:"3px 8px", fontSize:11, fontWeight:700 }}>{vehicleSoon} due soon</div>}
+                    </div>
+
                     <span style={{ color:MUTED }}>›</span>
                   </div>
                 );
               })}
             </div>
 
-            <SecTitle t="Upcoming Reminders"/>
-            {upcomingReminders.map(r=><ReminderCard key={r.id} r={r}/>)}
+            {/* Overdue */}
+           <SecTitle t="Overdue"/>
+           {overdueReminders.length === 0 ? (
+             <div style={{ background:CARD, borderRadius:12, padding:"14px 16px", border:`1px solid ${BORDER}`, color:"#22c55e", fontSize:13, marginBottom:22 }}>
+               ✓ No overdue maintenance
+             </div>
+           ) : (
+             <div style={{ marginBottom:22 }}>
+               {overdueReminders.map(r=><DashboardReminderCard key={r.id} r={r}/>)}
+             </div>
+           )}
+
+           {/* Due Soon */}
+           <SecTitle t="Due Soon"/>
+           {dueSoonReminders.length === 0 ? (
+             <div style={{ background:CARD, borderRadius:12, padding:"13px 14px", border:`1px solid ${BORDER}`, color:MUTED, fontSize:13 }}>
+               No upcoming maintenance within the next 30 days or 5,000 KM.
+             </div>
+           ) : (
+             <div>
+               {dueSoonReminders.map(r=><DashboardReminderCard key={r.id} r={r}/>)}
+             </div>
+           )}
           </div>
         )}
 
@@ -527,7 +789,7 @@ export default function App() {
                   <div style={{ width:56, height:56, borderRadius:14, background:veh.color+"22", border:`2px solid ${veh.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28 }}>🚘</div>
                   <div>
                     <div style={{ fontSize:20, fontWeight:800 }}>{veh.name}</div>
-                    <div style={{ fontSize:13, color:MUTED }}>{veh.plate} · {veh.year}{veh.last_odometer?` · ${veh.last_odometer.toLocaleString()} km`:""}</div>
+                    <div style={{ fontSize:13, color:MUTED }}>{veh.plate} · {veh.year}{veh.last_odometer?` · ${veh.last_odometer.toLocaleString()} KM`:""}</div>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -539,16 +801,95 @@ export default function App() {
                 <SecTitle t="Fuel Efficiency Trend"/>
                 <FuelChart data={vFuels}/>
               </div>
+
+              {/* Alerts for this vehicle */}
+               {(() => {
+                 const vAlerts = reminders
+                   .filter(r => r.vehicle_id === veh.id)
+                   .map(r => ({ ...r, _status:getReminderStatus(r) }))
+                   .filter(r => {
+                     const st = r._status;
+                     return st.overdue ||
+                       (!st.overdue && (
+                         (r.due_date !== "9999-12-31" && st.days >= 0 && st.days <= 30) ||
+                         (st.kmLeft !== null && st.kmLeft >= 0 && st.kmLeft <= 5000)
+                       ));
+                   })
+                   .sort((a,b) => reminderUrgency(a) - reminderUrgency(b));
+                 return (
+                   <div style={{ marginBottom:16 }}>
+                     <SecTitle t="Alerts"/>
+                     {vAlerts.length === 0 ? (
+                       <div style={{
+                         background:CARD,
+                         borderRadius:12,
+                         padding:"12px 14px",
+                         border:`1px solid ${BORDER}`,
+                         color:"#22c55e",
+                         fontSize:13
+                       }}>
+                         ✓ No alerts
+                       </div>
+                     ) : (
+                       <div>
+                         {vAlerts.map(r => {
+                           const st = r._status;
+                           const color = st.overdue ? "#ef4444" : "#f97316";
+                           return (
+                             <div key={r.id} style={{
+                               background:CARD,
+                               borderRadius:10,
+                               padding:"10px 12px",
+                               border:`1px solid ${BORDER}`,
+                               marginBottom:7,
+                               display:"flex",
+                               alignItems:"center",
+                               gap:10
+                             }}>
+                               <div style={{
+                                 width:7,
+                                 height:7,
+                                 borderRadius:"50%",
+                                 background:color,
+                                 flexShrink:0
+                               }}/>
+                               <div style={{ flex:1, minWidth:0 }}>
+                                 <div style={{ fontSize:13, fontWeight:700 }}>
+                                   {r.type}
+                                 </div>
+                               </div>
+                               <div style={{
+                                 fontSize:11,
+                                 fontWeight:700,
+                                 color,
+                                 whiteSpace:"nowrap"
+                               }}>
+                                 {reminderBadge(r)}
+                               </div>
+                             </div>
+                           );
+                         })}
+                       </div>
+                     )}
+                   </div>
+                 );
+               })()}
+
               <div style={{ marginBottom:16 }}>
                 <SecTitle t="Service History"/>
                 {vServices.map(s => (
                   <div key={s.id} style={{ background:CARD, borderRadius:12, padding:"12px 14px", border:`1px solid ${BORDER}`, marginBottom:8 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:10, marginBottom:4 }}>
                       <span style={{ fontWeight:700 }}>{s.type}</span>
-                      <span style={{ color:ACCENT, fontWeight:700 }}>RM {s.cost}</span>
+                      <span style={{ color:ACCENT, fontWeight:700 }}>{s.odometer.toLocaleString()} KM</span>
                     </div>
-                    <div style={{ fontSize:12, color:MUTED }}>{s.date} · {s.odometer.toLocaleString()} km{s.workshop?` · ${s.workshop}`:""}</div>
+                    <div style={{ fontSize:12, color:MUTED }}>{s.date} · RM {s.cost}{s.workshop?` · ${s.workshop}`:""}</div>
+                    {s.reminder_type && s.reminder_type!=="none" && <div style={{ fontSize:11, color:"#22c55e", marginTop:5 }}>Next reminder: {s.reminder_type==="mileage"?`${(s.reminder_km||0).toLocaleString()} KM`:s.reminder_type==="schedule"?`${s.reminder_months||0} month${s.reminder_months>1?"s":""}`:`${s.reminder_km?(s.reminder_km.toLocaleString()+" KM"):""}${s.reminder_km&&s.reminder_months?" or ":""}${s.reminder_months?(s.reminder_months+" month"+(s.reminder_months>1?"s":"")):""}`}</div>}
                     {s.notes && <div style={{ fontSize:12, color:SUBTLE, marginTop:4 }}>{s.notes}</div>}
+                    <div style={{ display:"flex", gap:6, justifyContent:"flex-end", marginTop:8 }}>
+                      <button onClick={()=>openServiceEdit(s)} style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:7, padding:"5px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>Edit</button>
+                      <button onClick={()=>setConfirmService(s)} style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:7, padding:"5px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>Remove</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -581,12 +922,17 @@ export default function App() {
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                     <div>
                       <span style={{ fontWeight:700 }}>{s.type}</span>
-                      <span style={{ marginLeft:8, fontSize:12, color:MUTED, background:"#334155", borderRadius:6, padding:"2px 8px" }}>{v?.name}</span>
+                      <span style={{ marginLeft:8, fontSize:12, color:ACCENT, background:ACCENT+"22", borderRadius:7, padding:"3px 8px",fontWeight:600 }}>{v?.name}</span>
                     </div>
-                    <span style={{ color:ACCENT, fontWeight:700 }}>RM {s.cost}</span>
+                    <span style={{ color:ACCENT, fontWeight:700 }}>{s.odometer.toLocaleString()} KM</span>
                   </div>
-                  <div style={{ fontSize:12, color:MUTED }}>{s.date} · {s.odometer.toLocaleString()} km{s.workshop?` · ${s.workshop}`:""}</div>
+                  <div style={{ fontSize:12, color:MUTED }}>{s.date} · RM {s.cost}{s.workshop?` · ${s.workshop}`:""}</div>
+                  {s.reminder_type && s.reminder_type!=="none" && <div style={{ fontSize:11, color:"#22c55e", marginTop:6 }}>Next reminder: {s.reminder_type==="mileage"?`${(s.reminder_km||0).toLocaleString()} KM`:s.reminder_type==="schedule"?`${s.reminder_months||0} month${s.reminder_months>1?"s":""}`:`${s.reminder_km?(s.reminder_km.toLocaleString()+" KM"):""}${s.reminder_km&&s.reminder_months?" or ":""}${s.reminder_months?(s.reminder_months+" month"+(s.reminder_months>1?"s":"")):""}`}</div>}
                   {s.notes && <div style={{ fontSize:12, color:SUBTLE, marginTop:6, borderTop:`1px solid ${BORDER}`, paddingTop:6 }}>{s.notes}</div>}
+                  <div style={{ display:"flex", gap:6, justifyContent:"flex-end", marginTop:8 }}>
+                    <button onClick={()=>openServiceEdit(s)} style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:7, padding:"5px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>Edit</button>
+                    <button onClick={()=>setConfirmService(s)} style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:7, padding:"5px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>Remove</button>
+                  </div>
                 </div>
               );
             })}
@@ -621,14 +967,19 @@ export default function App() {
           <div>
             {["Overdue","This Month","Upcoming"].map(group => {
               const grouped = reminders
-                .map(r=>({ ...r, days:getDaysUntil(r.due_date), vehicle:vehicles.find(v=>v.id===r.vehicle_id) }))
-                .filter(r => group==="Overdue" ? r.days<0 : group==="This Month" ? r.days>=0&&r.days<=30 : r.days>30&&r.days<9999)
-                .sort((a,b)=>a.days-b.days);
+                .map(r=>({ ...r, vehicle:vehicles.find(v=>v.id===r.vehicle_id) }))
+                .filter(r => {
+                  const st = getReminderStatus(r);
+                  if (group === "Overdue") return st.overdue;
+                  if (group === "This Month") return !st.overdue && r.due_date!=="9999-12-31" && st.days>=0 && st.days<=30;
+                  return !st.overdue && (r.due_date==="9999-12-31" || st.days>30);
+                })
+                .sort((a,b)=>reminderUrgency(a)-reminderUrgency(b));
               if (!grouped.length) return null;
               return (
                 <div key={group} style={{ marginBottom:20 }}>
                   <div style={{ fontSize:13, color:group==="Overdue"?"#ef4444":group==="This Month"?"#f97316":MUTED, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{group}</div>
-                  {grouped.map(r=><ReminderCard key={r.id} r={r} showDone={true}/>)}
+                  {grouped.map(r=><ReminderCard key={r.id} r={r}/>)}
                 </div>
               );
             })}
@@ -645,7 +996,11 @@ export default function App() {
                 <div key={v.id} style={{ background:CARD, borderRadius:16, padding:18, border:`1px solid ${BORDER}` }}>
                   <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:12 }}>
                     <div style={{ width:52, height:52, borderRadius:14, background:v.color+"22", border:`2px solid ${v.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>🚘</div>
-                    <div><div style={{ fontWeight:800, fontSize:16 }}>{v.name}</div><div style={{ fontSize:12, color:MUTED }}>{v.plate} · {v.year}</div></div>
+                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:800, fontSize:16 }}>{v.name}</div><div style={{ fontSize:12, color:MUTED }}>{v.plate} · {v.year}</div></div>
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                      <button onClick={()=>openVehicleEdit(v)} style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Edit</button>
+                      <button onClick={()=>removeVehicle(v)} disabled={saving} style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:8, padding:"6px 10px", cursor:saving?"not-allowed":"pointer", fontSize:12, fontWeight:700, opacity:saving?0.5:1 }}>Remove</button>
+                    </div>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                     {[["Services",vs.length],["Fill-ups",fuels.filter(f=>f.vehicle_id===v.id).length],["Total Spent",`RM${total.toFixed(0)}`]].map(([l,val])=>(
@@ -692,6 +1047,16 @@ export default function App() {
                         <div style={{ fontSize:14, fontWeight:700 }}>{v.name}</div>
                         <div style={{ fontSize:11, color:MUTED }}>{v.plate} · {v.year}</div>
                       </div>
+                      <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                        <button onClick={() => openVehicleEdit(v)}
+                          style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>
+                          Edit
+                        </button>
+                        <button onClick={() => setConfirmVehicle(v)}
+                          style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:7, padding:"6px 10px", cursor:"pointer", fontSize:11, fontWeight:700 }}>
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -730,10 +1095,10 @@ export default function App() {
       </div>
 
       {/* ── Modals ── */}
-      {modal==="service" && (
-        <Modal title="Add Service Record" onClose={closeModal}>
+      {(modal==="service" || modal==="service-edit") && (
+        <Modal title={modal==="service-edit" ? "Edit Service Record" : "Add Service Record"} onClose={closeModal}>
           <FF label="Vehicle">
-            <select style={IS} onChange={e=>setForm(f=>({ ...f, vehicle_id:e.target.value }))}>
+            <select style={IS} value={form.vehicle_id||""} disabled={modal==="service-edit"} onChange={e=>setForm(f=>({ ...f, vehicle_id:e.target.value }))}>
               <option value="">Select vehicle...</option>
               {vehicles.map(v=><option key={v.id} value={v.id}>{v.name} ({v.plate})</option>)}
             </select>
@@ -742,17 +1107,18 @@ export default function App() {
             <ServiceTypePicker value={form.type} onChange={val=>setForm(f=>({ ...f, type:val }))} serviceTypes={serviceTypes} onAddType={addServiceType}/>
           </FF>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <FF label="Date"><input type="date" style={IS} onChange={e=>setForm(f=>({ ...f, date:e.target.value }))}/></FF>
-            <FF label="Odometer (km)"><input type="number" style={IS} placeholder="e.g. 45000" onChange={e=>setForm(f=>({ ...f, odometer:e.target.value }))}/></FF>
+            <FF label="Date"><input type="date" style={IS} value={form.date||""} onChange={e=>setForm(f=>({ ...f, date:e.target.value }))}/></FF>
+            <FF label="Odometer (KM)"><input type="number" style={IS} placeholder="e.g. 45000" value={form.odometer||""} onChange={e=>setForm(f=>({ ...f, odometer:e.target.value }))}/></FF>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <FF label="Cost (RM)"><input type="number" style={IS} placeholder="0.00" onChange={e=>setForm(f=>({ ...f, cost:e.target.value }))}/></FF>
-            <FF label="Workshop"><input type="text" style={IS} placeholder="Name or DIY" onChange={e=>setForm(f=>({ ...f, workshop:e.target.value }))}/></FF>
+            <FF label="Cost (RM)"><input type="number" style={IS} placeholder="0.00" value={form.cost||""} onChange={e=>setForm(f=>({ ...f, cost:e.target.value }))}/></FF>
+            <FF label="Workshop"><input type="text" style={IS} placeholder="Name or DIY" value={form.workshop||""} onChange={e=>setForm(f=>({ ...f, workshop:e.target.value }))}/></FF>
           </div>
-          <FF label="Notes"><textarea style={{ ...IS, minHeight:60, resize:"vertical" }} onChange={e=>setForm(f=>({ ...f, notes:e.target.value }))}/></FF>
+          <ServiceReminderConfig form={form} setForm={setForm}/>
+          <FF label="Notes"><textarea style={{ ...IS, minHeight:60, resize:"vertical" }} value={form.notes||""} onChange={e=>setForm(f=>({ ...f, notes:e.target.value }))}/></FF>
           <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
             <Btn label="Cancel" onClick={closeModal} variant="secondary"/>
-            <Btn label={saving?"Saving...":"Save Record"} onClick={saveService} disabled={saving}/>
+            <Btn label={saving?"Saving...":modal==="service-edit"?"Save Changes":"Save Record"} onClick={modal==="service-edit"?saveServiceEdit:saveService} disabled={saving}/>
           </div>
         </Modal>
       )}
@@ -783,52 +1149,47 @@ export default function App() {
         </Modal>
       )}
 
-      {modal==="reminder" && (
-        <Modal title="Add Reminder" onClose={closeModal}>
-          <FF label="Vehicle">
-            <select style={IS} onChange={e=>setForm(f=>({ ...f, vehicle_id:e.target.value }))}>
-              <option value="">Select vehicle...</option>
-              {vehicles.map(v=><option key={v.id} value={v.id}>{v.name} ({v.plate})</option>)}
-            </select>
-          </FF>
-          <FF label="Service Type">
-            <ServiceTypePicker value={form.type} onChange={val=>setForm(f=>({ ...f, type:val }))} serviceTypes={serviceTypes} onAddType={addServiceType}/>
-          </FF>
-          <RecurringConfig form={form} setForm={setForm}/>
-          {form.recur_type==="mileage" && form.last_done_odo && form.recur_value && (
-            <div style={{ background:"#22c55e11", border:"1px solid #22c55e44", borderRadius:8, padding:"10px 12px", marginBottom:14, fontSize:13, color:"#22c55e" }}>
-              🔧 Next due odometer: <strong>{(parseInt(form.last_done_odo)+parseInt(form.recur_value)).toLocaleString()} km</strong>
+      {confirmService && (
+        <Modal title="Remove Service?" onClose={() => !saving && setConfirmService(null)}>
+          <div style={{ color:TEXT, fontSize:14, lineHeight:1.6, marginBottom:16 }}>
+            Are you sure you want to remove <strong>{confirmService.type}</strong> on {confirmService.date}?
+            <div style={{ color:"#fca5a5", background:"#ef444411", border:"1px solid #ef444433", borderRadius:10, padding:"10px 12px", marginTop:12 }}>
+              The reminder generated by this service will also be removed. If there is an older service of the same type, its reminder will be restored automatically.
             </div>
-          )}
-          {form.recur_type==="schedule" && form.last_done_date && form.recur_value && (
-            <div style={{ background:"#22c55e11", border:"1px solid #22c55e44", borderRadius:8, padding:"10px 12px", marginBottom:14, fontSize:13, color:"#22c55e" }}>
-              📅 Next due date: <strong>{calcNextDueDate(form.last_done_date, parseInt(form.recur_value))||"—"}</strong>
-            </div>
-          )}
-          <FF label="Due Date *">
-            <input type="date" style={IS} value={form.due_date||""} onChange={e=>setForm(f=>({ ...f, due_date:e.target.value }))}/>
-          </FF>
-          <FF label="Notes">
-            <textarea style={{ ...IS, minHeight:50, resize:"vertical" }} onChange={e=>setForm(f=>({ ...f, notes:e.target.value }))}/>
-          </FF>
+          </div>
           <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-            <Btn label="Cancel" onClick={closeModal} variant="secondary"/>
-            <Btn label={saving?"Saving...":"Save Reminder"} onClick={saveReminder} disabled={saving}/>
+            <Btn label="Cancel" onClick={() => setConfirmService(null)} variant="secondary" disabled={saving}/>
+            <Btn label={saving ? "Removing..." : "Yes, Remove"} onClick={() => removeService(confirmService)} variant="danger" disabled={saving}/>
           </div>
         </Modal>
       )}
 
-      {modal==="vehicle" && (
-        <Modal title="Add Car" onClose={closeModal}>
-          <FF label="Car Name"><input type="text" style={IS} placeholder="e.g. Perodua Myvi" onChange={e=>setForm(f=>({ ...f, name:e.target.value }))}/></FF>
-          <FF label="Plate Number"><input type="text" style={IS} placeholder="e.g. BCD 1234" onChange={e=>setForm(f=>({ ...f, plate:e.target.value }))}/></FF>
+      {confirmVehicle && (
+        <Modal title="Remove Car?" onClose={() => !saving && setConfirmVehicle(null)}>
+          <div style={{ color:TEXT, fontSize:14, lineHeight:1.6, marginBottom:16 }}>
+            Are you sure you want to remove <strong>{confirmVehicle.name}</strong> ({confirmVehicle.plate})?
+            <div style={{ color:"#fca5a5", background:"#ef444411", border:"1px solid #ef444433", borderRadius:10, padding:"10px 12px", marginTop:12 }}>
+              This will permanently delete the car and all of its service, fuel and reminder records. This action cannot be undone.
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn label="Cancel" onClick={() => setConfirmVehicle(null)} variant="secondary" disabled={saving}/>
+            <Btn label={saving ? "Removing..." : "Yes, Remove"} onClick={() => removeVehicle(confirmVehicle)} variant="danger" disabled={saving}/>
+          </div>
+        </Modal>
+      )}
+
+      {(modal==="vehicle" || modal==="vehicle-edit") && (
+        <Modal title={modal==="vehicle-edit" ? "Edit Vehicle" : "Add Vehicle"} onClose={closeModal}>
+          <FF label="Vehicle Name"><input type="text" style={IS} placeholder="e.g. Perodua Myvi" value={form.name||""} onChange={e=>setForm(f=>({ ...f, name:e.target.value }))}/></FF>
+          <FF label="Plate Number"><input type="text" style={IS} placeholder="e.g. BCD 1234" value={form.plate||""} onChange={e=>setForm(f=>({ ...f, plate:e.target.value }))}/></FF>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <FF label="Year"><input type="number" style={IS} placeholder="2020" onChange={e=>setForm(f=>({ ...f, year:e.target.value }))}/></FF>
-            <FF label="Color"><input type="color" style={{ ...IS, height:42, padding:4 }} defaultValue="#6366f1" onChange={e=>setForm(f=>({ ...f, color:e.target.value }))}/></FF>
+            <FF label="Year"><input type="number" style={IS} placeholder="2020" value={form.year||""} onChange={e=>setForm(f=>({ ...f, year:e.target.value }))}/></FF>
+            <FF label="Color"><input type="color" style={{ ...IS, height:42, padding:4 }} value={form.color||"#6366f1"} onChange={e=>setForm(f=>({ ...f, color:e.target.value }))}/></FF>
           </div>
           <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
             <Btn label="Cancel" onClick={closeModal} variant="secondary"/>
-            <Btn label={saving?"Saving...":"Add Car"} onClick={saveVehicle} disabled={saving}/>
+            <Btn label={saving?"Saving...":modal==="vehicle-edit" ? "Save Changes" : "Add Vehicle"} onClick={saveVehicle} disabled={saving}/>
           </div>
         </Modal>
       )}

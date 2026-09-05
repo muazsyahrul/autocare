@@ -31,11 +31,8 @@ export const api = {
   updateFuel:      (id, d)     => req("PUT",    `/fuels/${id}`, d),
   deleteFuel:      (id)        => req("DELETE", `/fuels/${id}`),
 
-  // Reminders
+  // Reminders (read-only; generated from service records)
   getReminders:    (params={}) => req("GET", "/reminders?" + new URLSearchParams(params)),
-  createReminder:  (data)      => req("POST",   "/reminders", data),
-  updateReminder:  (id, d)     => req("PUT",    `/reminders/${id}`, d),
-  deleteReminder:  (id)        => req("DELETE", `/reminders/${id}`),
 
   // Service Types
   getServiceTypes:   ()     => req("GET",    "/service-types"),
