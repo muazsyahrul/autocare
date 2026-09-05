@@ -1,16 +1,13 @@
 FROM node:22-bookworm-slim
 
-# Install build tools needed for better-sqlite3
-RUN apk add --no-cache python3 make g++
-
 WORKDIR /app
 
-COPY package.json .
-RUN npm install --production
+COPY package.json package-lock.json ./
+
+RUN npm install --omit=dev
 
 COPY . .
 
-# Data directory for SQLite file
 RUN mkdir -p /app/data
 
 EXPOSE 4000
