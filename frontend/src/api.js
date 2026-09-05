@@ -3,6 +3,7 @@ const BASE = "/api";
 async function req(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -13,6 +14,11 @@ async function req(method, path, body) {
 
 // ─── Vehicles ─────────────────────────────────────────────────────────────────
 export const api = {
+  // Authentication
+  login:           (username, password) => req("POST", "/auth/login", { username, password }),
+  me:              () => req("GET", "/auth/me"),
+  logout:           () => req("POST", "/auth/logout"),
+
   // Vehicles
   getVehicles:     ()      => req("GET",    "/vehicles"),
   createVehicle:   (data)  => req("POST",   "/vehicles", data),
