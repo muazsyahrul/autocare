@@ -374,6 +374,11 @@ export default function App() {
   const [saving,          setSaving]          = useState(false);
   const [confirmVehicle,   setConfirmVehicle]   = useState(null);
   const [confirmService,   setConfirmService]   = useState(null);
+  const [dbPassword,       setDbPassword]       = useState("");
+  const [dbFile,           setDbFile]           = useState(null);
+  const [dbBusy,           setDbBusy]           = useState(false);
+  const [dbMessage,        setDbMessage]        = useState("");
+  const [dbMessageType,    setDbMessageType]    = useState("");
 
   // ── Authentication + load all data ──
   const loadAll = useCallback(async () => {
@@ -568,6 +573,85 @@ export default function App() {
     setSaving(false);
   };
 
+  // ── Database Backup / Restore ──
+  const exportDatabase = async () => {
+    if (!dbPassword) {
+      setDbMessageType("error");
+      setDbMessage("Enter your password to export the database.");
+      return;
+    }
+
+    setDbBusy(true);
+    setDbMessage("");
+    setDbMessageType("");
+
+    try {
+      await api.exportDatabase(dbPassword);
+
+      setDbMessageType("success");
+      setDbMessage("Database exported successfully as garage.db.");
+      setDbPassword("");
+    } catch (e) {
+      setDbMessageType("error");
+      setDbMessage(e.message || "Database export failed.");
+    } finally {
+      setDbBusy(false);
+    }
+  };
+
+  const importDatabase = async () => {
+    if (!dbFile) {
+      setDbMessageType("error");
+      setDbMessage("Select a garage.db file first.");
+      return;
+    }
+
+    if (!dbPassword) {
+      setDbMessageType("error");
+      setDbMessage("Enter your password to import the database.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Import this database?\n\n" +
+      "This will replace ALL current AutoCare data.\n\n" +
+      "Your current database will automatically be backed up before the import.\n\n" +
+      "Continue?"
+    );
+
+    if (!confirmed) return;
+
+    setDbBusy(true);
+    setDbMessage("");
+    setDbMessageType("");
+
+    try {
+      const result = await api.importDatabase(dbFile, dbPassword);
+
+      setDbMessageType("success");
+      setDbMessage(
+        result?.backup
+          ? `Database imported successfully. Safety backup created: ${result.backup}`
+          : "Database imported successfully."
+      );
+
+      setDbFile(null);
+      setDbPassword("");
+
+      // Reload the application so all data comes from the imported database.
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+
+    } catch (e) {
+      setDbMessageType("error");
+      setDbMessage(e.message || "Database import failed.");
+    } finally {
+      setDbBusy(false);
+    }
+  };
+
+  
   // ── Computed ──
   const totalSpentYear = [...services, ...fuels]
     .filter(x => x.date?.startsWith(new Date().getFullYear().toString()))
@@ -1219,6 +1303,179 @@ export default function App() {
               </div>
               <ServiceTypePicker value="" onChange={()=>{}} serviceTypes={serviceTypes} onAddType={addServiceType}/>
             </div>
+
+            {/* ── DATABASE BACKUP ── */}
+            <div style={{
+              background:CARD,
+              borderRadius:14,
+              padding:18,
+              border:`1px solid ${BORDER}`,
+              marginBottom:16
+            }}>
+              <div style={{
+                fontWeight:700,
+                fontSize:16,
+                marginBottom:4
+              }}>
+                Database
+              </div>
+
+              <div style={{
+                fontSize:13,
+                color:MUTED,
+                marginBottom:16,
+                lineHeight:1.5
+              }}>
+                Backup or restore your complete AutoCare database.
+              </div>
+
+              {/* Password */}
+              <FF label="Password">
+                <input
+                  type="password"
+                  style={IS}
+                  placeholder="Enter AutoCare password"
+                  value={dbPassword}
+                  disabled={dbBusy}
+                  onChange={e => {
+                    setDbPassword(e.target.value);
+                    setDbMessage("");
+                    setDbMessageType("");
+                  }}
+                />
+              </FF>
+
+              {/* Export */}
+              <div style={{
+                background:BG,
+                borderRadius:10,
+                padding:14,
+                marginBottom:12
+              }}>
+                <div style={{
+                  fontSize:14,
+                  fontWeight:700,
+                  marginBottom:4
+                }}>
+                  Export Database
+                </div>
+
+                <div style={{
+                  fontSize:12,
+                  color:MUTED,
+                  lineHeight:1.5,
+                  marginBottom:12
+                }}>
+                  Download a complete copy of your AutoCare SQLite database.
+                  The file will be saved as <strong style={{ color:TEXT }}>garage.db</strong>.
+                </div>
+
+                <Btn
+                  label={dbBusy ? "Processing..." : "Export garage.db"}
+                  onClick={exportDatabase}
+                  disabled={dbBusy || !dbPassword}
+                />
+              </div>
+
+              {/* Import */}
+              <div style={{
+                background:BG,
+                borderRadius:10,
+                padding:14
+              }}>
+                <div style={{
+                  fontSize:14,
+                  fontWeight:700,
+                  marginBottom:4
+                }}>
+                  Import Database
+                </div>
+
+                <div style={{
+                  fontSize:12,
+                  color:MUTED,
+                  lineHeight:1.5,
+                  marginBottom:12
+                }}>
+                  Restore a previously exported <strong style={{ color:TEXT }}>garage.db</strong>.
+                </div>
+
+                <input
+                  type="file"
+                  accept=".db,.sqlite,.sqlite3"
+                  disabled={dbBusy}
+                  onChange={e => {
+                    setDbFile(e.target.files?.[0] || null);
+                    setDbMessage("");
+                    setDbMessageType("");
+                  }}
+                  style={{
+                    width:"100%",
+                    boxSizing:"border-box",
+                    color:TEXT,
+                    background:CARD,
+                    border:`1px solid ${BORDER}`,
+                    borderRadius:8,
+                    padding:9,
+                    fontSize:12,
+                    marginBottom:10
+                  }}
+                />
+
+                {dbFile && (
+                  <div style={{
+                    fontSize:12,
+                    color:"#22c55e",
+                    marginBottom:10
+                  }}>
+                    Selected: {dbFile.name}
+                  </div>
+                )}
+
+                <div style={{
+                  color:"#fca5a5",
+                  background:"#ef444411",
+                  border:"1px solid #ef444433",
+                  borderRadius:9,
+                  padding:"10px 12px",
+                  marginBottom:12,
+                  fontSize:12,
+                  lineHeight:1.5
+                }}>
+                  <strong>Warning:</strong> Importing will replace all current
+                  AutoCare data. Your current database will be backed up
+                  automatically before the import.
+                </div>
+
+                <Btn
+                  label={dbBusy ? "Importing..." : "Import garage.db"}
+                  onClick={importDatabase}
+                  variant="danger"
+                  disabled={dbBusy || !dbFile || !dbPassword}
+                />
+              </div>
+
+              {/* Status */}
+              {dbMessage && (
+                <div style={{
+                  marginTop:12,
+                  color:dbMessageType==="success" ? "#22c55e" : "#fca5a5",
+                  background:dbMessageType==="success"
+                    ? "#22c55e11"
+                    : "#ef444411",
+                  border:dbMessageType==="success"
+                    ? "1px solid #22c55e33"
+                    : "1px solid #ef444433",
+                  borderRadius:9,
+                  padding:"10px 12px",
+                  fontSize:12,
+                  lineHeight:1.5
+                }}>
+                  {dbMessage}
+                </div>
+              )}
+            </div>
+
             <div style={{ background:CARD, borderRadius:14, padding:18, border:`1px solid ${BORDER}` }}>
               <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🔒 Account</div>
               <div style={{ fontSize:13, color:MUTED, marginBottom:14 }}>
