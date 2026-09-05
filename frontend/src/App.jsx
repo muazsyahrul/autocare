@@ -1203,7 +1203,7 @@ export default function App() {
               )}
             </div>
 
-            <div style={{ background:CARD, borderRadius:14, padding:18, border:`1px solid ${BORDER}` }}>
+            <div style={{ background:CARD, borderRadius:14, padding:18, border:`1px solid ${BORDER}`,marginBottom:16 }}>
               <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🔧 Service Types</div>
               <div style={{ fontSize:13, color:MUTED, marginBottom:14 }}>Manage available service types across all forms.</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
