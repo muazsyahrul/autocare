@@ -97,9 +97,28 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_source_service ON reminders(so
 
 // ─── Seed default service types ───────────────────────────────────────────────
 const defaults = [
-  "Oil Change","Tyre Rotation","Brake Pad","Air Filter",
-  "Timing Belt","Battery","Coolant","Transmission","Insurance","Road Tax"
+  "Oil Change",
+  "Oil Filter",
+  "Air Filter",
+  "Cabin Air Filter",
+  "Coolant",
+  "Brake Fluid",
+  "Brake Pads",
+  "Spark Plugs",
+  "Battery",
+  "Transmission Oil",
+  "CVT Oil",
+  "Fuel Filter",
+  "Tyre Rotation",
+  "Tyre Repair / Fix",
+  "Wheel Alignment",
+  "Wheel Balancing",
+  "Wiper",
+  "Timing Belt",
+  "Aircon Filter",
+  "Aircon Gas"
 ];
+
 const insertType = db.prepare(
   "INSERT OR IGNORE INTO service_types (name, is_default) VALUES (?, 1)"
 );
