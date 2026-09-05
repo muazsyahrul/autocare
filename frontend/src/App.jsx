@@ -801,6 +801,18 @@ export default function App() {
     </div>
   );
 
+  // Keep all hooks above unconditional. Rendering auth states here avoids
+  // changing hook order when the user logs in/out.
+  if (authLoading) return (
+    <div style={{
+      minHeight:"100vh", background:BG, display:"flex", alignItems:"center",
+      justifyContent:"center"
+    }}>
+      <Spinner />
+    </div>
+  );
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
+
   return (
     <div style={{ background:BG, minHeight:"100vh", fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
 
