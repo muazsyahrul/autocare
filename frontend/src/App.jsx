@@ -266,8 +266,97 @@ function FuelChart({ data }) {
   );
 }
 
+// ─── Login ────────────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!username.trim() || !password) {
+      setError("Enter your username and password.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onLogin(username.trim(), password);
+    } catch (e) {
+      setError(e.message || "Login failed");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      minHeight:"100vh", background:BG, display:"flex", alignItems:"center",
+      justifyContent:"center", padding:20, boxSizing:"border-box"
+    }}>
+      <form onSubmit={submit} style={{
+        width:"100%", maxWidth:380, background:CARD, border:`1px solid ${BORDER}`,
+        borderRadius:18, padding:28, boxSizing:"border-box",
+        boxShadow:"0 20px 60px rgba(0,0,0,.35)"
+      }}>
+        <div style={{ textAlign:"center", marginBottom:26 }}>
+          <div style={{ fontSize:30, marginBottom:8 }}>🚗</div>
+          <div style={{ color:TEXT, fontSize:24, fontWeight:800 }}>AutoCare</div>
+          <div style={{ color:MUTED, fontSize:13, marginTop:5 }}>Sign in to continue</div>
+        </div>
+
+        <FF label="Username">
+          <input
+            autoFocus
+            autoComplete="username"
+            type="text"
+            style={IS}
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+          />
+        </FF>
+
+        <FF label="Password">
+          <input
+            autoComplete="current-password"
+            type="password"
+            style={IS}
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+          />
+        </FF>
+
+        {error && (
+          <div style={{
+            color:"#fca5a5", background:"#ef444411", border:"1px solid #ef444433",
+            borderRadius:9, padding:"10px 12px", marginBottom:14, fontSize:13
+          }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy}
+          style={{
+            width:"100%", padding:"12px 18px", borderRadius:10, border:"none",
+            cursor:busy?"not-allowed":"pointer", fontWeight:800, fontSize:14,
+            background:ACCENT, color:"#0a0f1e", opacity:busy?.65:1
+          }}
+        >
+          {busy ? "Signing in..." : "Login"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [authLoading,     setAuthLoading]     = useState(true);
+  const [user,            setUser]            = useState(null);
   const [tab,             setTab]             = useState("dashboard");
   const [vehicles,        setVehicles]        = useState([]);
   const [services,        setServices]        = useState([]);
@@ -286,7 +375,7 @@ export default function App() {
   const [confirmVehicle,   setConfirmVehicle]   = useState(null);
   const [confirmService,   setConfirmService]   = useState(null);
 
-  // ── Load all data on mount ──
+  // ── Authentication + load all data ──
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -296,11 +385,62 @@ export default function App() {
       ]);
       setVehicles(v); setServices(s); setFuels(f);
       setReminders(r); setServiceTypes(st); setSettings(cfg);
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error(e);
+    }
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    let active = true;
+    api.me()
+      .then(me => {
+        if (!active) return;
+        setUser(me);
+        loadAll();
+      })
+      .catch(() => {
+        if (active) {
+          setUser(null);
+          setLoading(false);
+        }
+      })
+      .finally(() => {
+        if (active) setAuthLoading(false);
+      });
+    return () => { active = false; };
+  }, [loadAll]);
+
+  async function handleLogin(username, password) {
+    const me = await api.login(username, password);
+    setUser(me);
+    await loadAll();
+  }
+
+  async function handleLogout() {
+    try {
+      await api.logout();
+    } finally {
+      setUser(null);
+      setVehicles([]);
+      setServices([]);
+      setFuels([]);
+      setReminders([]);
+      setServiceTypes([]);
+      setTab("dashboard");
+    }
+  }
+
+  if (authLoading) return (
+    <div style={{
+      minHeight:"100vh", background:BG, display:"flex", alignItems:"center",
+      justifyContent:"center"
+    }}>
+      <Spinner />
+    </div>
+  );
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   const veh          = selectedVehicle ? vehicles.find(v=>v.id===selectedVehicle) : null;
   const fuelPrice    = settings.fuel_price_per_l || "2.24";
@@ -1080,6 +1220,13 @@ export default function App() {
                 ))}
               </div>
               <ServiceTypePicker value="" onChange={()=>{}} serviceTypes={serviceTypes} onAddType={addServiceType}/>
+            </div>
+            <div style={{ background:CARD, borderRadius:14, padding:18, border:`1px solid ${BORDER}` }}>
+              <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🔒 Account</div>
+              <div style={{ fontSize:13, color:MUTED, marginBottom:14 }}>
+                Signed in as <strong style={{ color:TEXT }}>{user?.username || ""}</strong>
+              </div>
+              <Btn label="Logout" onClick={handleLogout} variant="danger"/>
             </div>
           </div>
         )}
