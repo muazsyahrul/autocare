@@ -102,10 +102,18 @@ export const api = {
   // Reminders (read-only; generated from service records)
   getReminders:    (params={}) => req("GET", "/reminders?" + new URLSearchParams(params)),
 
-  // Service Types
-  getServiceTypes:   ()     => req("GET",    "/service-types"),
-  createServiceType: (name) => req("POST",   "/service-types", { name }),
-  deleteServiceType: (id)   => req("DELETE", `/service-types/${id}`),
+  // Service Categories & Types
+  getServiceCategories: ()                  => req("GET", "/service-categories"),
+  getServiceTypes:      ()                  => req("GET", "/service-types"),
+  createServiceType:    (name, category_id) => req("POST", "/service-types", {name,category_id}),
+
+updateServiceType: (id, name) =>
+  req("PUT", `/service-types/${id}`, {
+    name
+  }),
+
+deleteServiceType: (id) =>
+  req("DELETE", `/service-types/${id}`),
 
   // Settings
   getSettings:    ()     => req("GET", "/settings"),
