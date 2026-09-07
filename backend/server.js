@@ -569,28 +569,146 @@ app.delete("/api/reminders/:id", (req, res) => {
   return err(res, "Reminders are managed automatically from service records", 405);
 });
 
-// ─── Service Types ────────────────────────────────────────────────────────────
+// ─── Service Categories & Types ──────────────────────────────────────────────
+
+app.get("/api/service-categories", (req, res) => {
+  const categories = db.prepare(`
+    SELECT id, name, sort_order
+    FROM service_categories
+    ORDER BY sort_order ASC, name ASC
+  `).all();
+
+  ok(res, categories);
+});
+
 app.get("/api/service-types", (req, res) => {
-  ok(res, db.prepare("SELECT * FROM service_types ORDER BY is_default DESC, name ASC").all());
+  const serviceTypes = db.prepare(`
+    SELECT
+      st.id,
+      st.name,
+      st.category_id,
+      sc.name AS category
+    FROM service_types st
+    LEFT JOIN service_categories sc
+      ON sc.id = st.category_id
+    ORDER BY
+      sc.sort_order ASC,
+      st.name ASC
+  `).all();
+
+  ok(res, serviceTypes);
 });
 
 app.post("/api/service-types", (req, res) => {
-  const { name } = req.body;
-  if (!name) return err(res, "name required");
+  const { name, category_id } = req.body;
+
+  if (!name || !String(name).trim()) {
+    return err(res, "name required");
+  }
+
+  const categoryId = parseInt(category_id, 10);
+
+  if (!Number.isInteger(categoryId)) {
+    return err(res, "category_id required");
+  }
+
+  const category = db.prepare(
+    "SELECT id FROM service_categories WHERE id=?"
+  ).get(categoryId);
+
+  if (!category) {
+    return err(res, "Invalid service category");
+  }
+
   try {
-    const r = db.prepare("INSERT INTO service_types (name, is_default) VALUES (?,0)").run(name.trim());
-    ok(res, db.prepare("SELECT * FROM service_types WHERE id=?").get(r.lastInsertRowid));
+    const r = db.prepare(`
+      INSERT INTO service_types (name, category_id)
+      VALUES (?, ?)
+    `).run(
+      String(name).trim(),
+      categoryId
+    );
+
+    ok(
+      res,
+      db.prepare(`
+        SELECT
+          st.id,
+          st.name,
+          st.category_id,
+          sc.name AS category
+        FROM service_types st
+        LEFT JOIN service_categories sc
+          ON sc.id = st.category_id
+        WHERE st.id=?
+      `).get(r.lastInsertRowid)
+    );
+  } catch {
+    err(res, "Service type already exists");
+  }
+});
+
+app.put("/api/service-types/:id", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { name } = req.body;
+
+  if (!name || !String(name).trim()) {
+    return err(res, "name required");
+  }
+
+  const existing = db.prepare(
+    "SELECT * FROM service_types WHERE id=?"
+  ).get(id);
+
+  if (!existing) {
+    return err(res, "Service type not found", 404);
+  }
+
+  try {
+    db.prepare(`
+      UPDATE service_types
+      SET name=?
+      WHERE id=?
+    `).run(
+      String(name).trim(),
+      id
+    );
+
+    ok(
+      res,
+      db.prepare(`
+        SELECT
+          st.id,
+          st.name,
+          st.category_id,
+          sc.name AS category
+        FROM service_types st
+        LEFT JOIN service_categories sc
+          ON sc.id = st.category_id
+        WHERE st.id=?
+      `).get(id)
+    );
   } catch {
     err(res, "Service type already exists");
   }
 });
 
 app.delete("/api/service-types/:id", (req, res) => {
-  const t = db.prepare("SELECT * FROM service_types WHERE id=?").get(req.params.id);
-  if (!t) return err(res, "Not found", 404);
-  if (t.is_default) return err(res, "Cannot delete default service types");
-  db.prepare("DELETE FROM service_types WHERE id=?").run(req.params.id);
-  ok(res, { id: parseInt(req.params.id) });
+  const id = parseInt(req.params.id, 10);
+
+  const type = db.prepare(
+    "SELECT * FROM service_types WHERE id=?"
+  ).get(id);
+
+  if (!type) {
+    return err(res, "Service type not found", 404);
+  }
+
+  db.prepare(
+    "DELETE FROM service_types WHERE id=?"
+  ).run(id);
+
+  ok(res, { id });
 });
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
