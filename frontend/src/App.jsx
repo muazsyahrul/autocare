@@ -271,15 +271,49 @@ function FuelForm({ form, setForm, defaultPricePerL }) {
   );
 }
 
+// ─── Fuel consumption calculation ─────────────────────────────────────────────
+// Full-to-full method:
+// - Full tank records are the interval boundaries.
+// - Partial fill-ups are included in the litres for the interval.
+// - A consumption result is produced only when the current record is Full.
+function calculateFuelIntervals(data) {
+  const pts = [...data].sort((a,b) => {
+    const dateDiff = new Date(a.date) - new Date(b.date);
+    return dateDiff || Number(a.id || 0) - Number(b.id || 0);
+  });
+  const intervals = [];
+  let lastFull = null;
+  let litersSinceFull = 0;
+
+  for (const pt of pts) {
+    const liters = Number(pt.liters) || 0;
+    if (lastFull) {
+      litersSinceFull += liters;
+    }
+    if (pt.full) {
+      if (lastFull) {
+        const distance = Number(pt.odometer) - Number(lastFull.odometer);
+        if (distance > 0 && litersSinceFull > 0) {
+          intervals.push({
+            eff: distance / litersSinceFull,
+            distance,
+            liters: litersSinceFull,
+            date: pt.date
+          });
+        }
+      }
+
+      lastFull = pt;
+      litersSinceFull = 0;
+    }
+  }
+  return intervals;
+}
+
 // ─── Mini Fuel Chart ──────────────────────────────────────────────────────────
 function FuelChart({ data }) {
   if (data.length < 2) return <div style={{ color:MUTED, fontSize:13, padding:"16px 0" }}>Need 2+ fill-ups to show trend</div>;
-  const pts = [...data].sort((a,b) => new Date(a.date)-new Date(b.date));
-  const effs = [];
-  for (let i=1; i<pts.length; i++) {
-    const dist = pts[i].odometer - pts[i-1].odometer;
-    if (dist>0 && pts[i].full) effs.push({ eff:dist/pts[i].liters });
-  }
+  const effs = calculateFuelIntervals(data);
   if (!effs.length) return <div style={{ color:MUTED, fontSize:13 }}>Not enough full tank data</div>;
   const maxE=Math.max(...effs.map(e=>e.eff)), minE=Math.min(...effs.map(e=>e.eff));
   const W=280, H=80, pad=10;
@@ -842,24 +876,22 @@ export default function App() {
     .reduce((s,x)=>s+x.cost,0);
   const overdueCount = reminders.filter(r=>getReminderStatus(r).overdue).length;
   const soonCount    = reminders.filter(r=>{ const st=getReminderStatus(r); return !st.overdue && ((r.due_date!=="9999-12-31" && st.days>=0&&st.days<=30) || (st.kmLeft!==null && st.kmLeft>=0 && st.kmLeft<=5000)); }).length;
-  // Fleet fuel economy in KM/L, calculated from full-tank fill-ups.
+  // Fleet fuel economy in KM/L, using the full-to-full method.
+  // Partial fill-ups contribute litres to the interval but do not create
+  // their own consumption result.
   const fleetFuelEconomy = useMemo(() => {
     let totalDistance = 0;
     let totalLiters = 0;
 
     vehicles.forEach(v => {
-      const pts = fuels
-        .filter(f => f.vehicle_id === v.id && f.full)
-        .sort((a,b) => new Date(a.date)-new Date(b.date));
+      const intervals = calculateFuelIntervals(
+        fuels.filter(f => f.vehicle_id === v.id)
+      );
 
-      for (let i=1; i<pts.length; i++) {
-        const distance = Number(pts[i].odometer) - Number(pts[i-1].odometer);
-        const liters = Number(pts[i].liters);
-        if (distance > 0 && liters > 0) {
-          totalDistance += distance;
-          totalLiters += liters;
-        }
-      }
+      intervals.forEach(({ distance, liters }) => {
+        totalDistance += distance;
+        totalLiters += liters;
+      });
     });
 
     return totalLiters > 0 ? totalDistance / totalLiters : null;
