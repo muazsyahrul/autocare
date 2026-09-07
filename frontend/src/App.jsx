@@ -24,6 +24,12 @@ function calcNextDueDate(lastDoneDate, months) {
   d.setMonth(d.getMonth() + months);
   return d.toISOString().split("T")[0];
 }
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return "";
+  const [year, month, day] = String(dateStr).split("-");
+  if (!year || !month || !day) return dateStr;
+  return `${day}-${month}-${year}`;
+}
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const BG     = "#0a0f1e";
@@ -967,7 +973,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <div style={{ fontSize:12, color:MUTED, marginTop:2 }}>{r.due_date!=="9999-12-31" ? `Due ${r.due_date}` : ""}</div>
+            <div style={{ fontSize:12, color:MUTED, marginTop:2 }}>{r.due_date!=="9999-12-31" ? <strong style={{ fontWeight:800 }}>Due {formatDisplayDate(r.due_date)}</strong> : ""}</div>
             {r.due_odometer && <div style={{ fontSize:12, color:MUTED }}>{st.currentOdo ? `Current ${st.currentOdo.toLocaleString()} KM · ` : ""}Due at {r.due_odometer.toLocaleString()} KM</div>}
             {r.interval_km && <div style={{ fontSize:11, color:SUBTLE }}>Next interval: {r.interval_km.toLocaleString()} KM</div>}
             {r.interval_months && <div style={{ fontSize:11, color:SUBTLE }}>Next interval: {r.interval_months} month{r.interval_months>1?"s":""}</div>}
@@ -1048,7 +1054,7 @@ export default function App() {
     <div style={{ background:CARD, borderRadius:12, padding:"12px 14px", border:`1px solid ${BORDER}`, marginBottom:8, display:"flex", alignItems:"center", gap:10 }}>
       <div style={{ flex:1 }}>
         <div style={{ fontWeight:600 }}>{f.liters}L · RM {parseFloat(f.cost).toFixed(2)} <span style={{ color:MUTED, fontSize:12, fontWeight:400 }}>({parseFloat(f.price_per_l).toFixed(2)}/L)</span></div>
-        <div style={{ fontSize:12, color:MUTED }}>{f.date} · {f.odometer.toLocaleString()} KM</div>
+        <div style={{ fontSize:12, color:MUTED }}><strong style={{ fontWeight:800 }}>{formatDisplayDate(f.date)}</strong> · {f.odometer.toLocaleString()} KM</div>
       </div>
       <div style={{ fontSize:11, color:f.full?"#22c55e":MUTED }}>{f.full?"⛽ Full":"Partial"}</div>
       <button onClick={()=>openFuelEdit(f)} style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:12, fontWeight:600, flexShrink:0 }}>Edit</button>
@@ -1137,7 +1143,7 @@ export default function App() {
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontWeight:700, fontSize:15, marginBottom:2 }}>{v.name}</div>
                       <div style={{ fontSize:12, color:MUTED }}>{v.plate} · {v.year}{lastOdo?` · ${lastOdo.toLocaleString()} KM`:""}</div>
-                      {vs[0] && <div style={{ fontSize:11, color:SUBTLE, marginTop:2 }}>Last: {vs[0].type} · {vs[0].date}</div>}
+                      {vs[0] && <div style={{ fontSize:11, color:SUBTLE, marginTop:2 }}>Last: {vs[0].type} · <strong style={{ fontWeight:800 }}>{formatDisplayDate(vs[0].date)}</strong></div>}
                     </div>
 
                     <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
@@ -1283,7 +1289,7 @@ export default function App() {
                       <span style={{ fontWeight:700 }}>{s.type}</span>
                       <span style={{ color:ACCENT, fontWeight:700 }}>{s.odometer.toLocaleString()} KM</span>
                     </div>
-                    <div style={{ fontSize:12, color:MUTED }}>{s.date} · RM {s.cost}{s.workshop?` · ${s.workshop}`:""}</div>
+                    <div style={{ fontSize:12, color:MUTED }}><strong style={{ fontWeight:800 }}>{formatDisplayDate(s.date)}</strong> · RM {s.cost}{s.workshop?` · ${s.workshop}`:""}</div>
                     {s.reminder_type && s.reminder_type!=="none" && <div style={{ fontSize:11, color:"#22c55e", marginTop:5 }}>Next reminder: {s.reminder_type==="mileage"?`${(s.reminder_km||0).toLocaleString()} KM`:s.reminder_type==="schedule"?`${s.reminder_months||0} month${s.reminder_months>1?"s":""}`:`${s.reminder_km?(s.reminder_km.toLocaleString()+" KM"):""}${s.reminder_km&&s.reminder_months?" or ":""}${s.reminder_months?(s.reminder_months+" month"+(s.reminder_months>1?"s":"")):""}`}</div>}
                     {s.notes && <div style={{ fontSize:12, color:SUBTLE, marginTop:4 }}>{s.notes}</div>}
                     <div style={{ display:"flex", gap:6, justifyContent:"flex-end", marginTop:8 }}>
@@ -1311,8 +1317,23 @@ export default function App() {
               </select>
               <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={{ ...IS, flex:1 }}>
                 <option value="All">All Types</option>
-                {serviceTypes.map(t=><option key={t.id} value={t.name}>{t.name}</option>)}
-              </select>
+                {serviceCategories.map(category => {
+                  const types = serviceTypes.filter(
+                    type => String(type.category_id) === String(category.id)
+                  );
+
+                  if (!types.length) return null;
+
+                  return (
+                    <optgroup key={category.id} label={category.name}>
+                      {types.map(type => (
+                        <option key={type.id} value={type.name}>
+                          — {type.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}              </select>
             </div>
             <div style={{ fontSize:12, color:MUTED, marginBottom:10 }}>{filteredServices.length} records</div>
             {filteredServices.map(s => {
@@ -1326,7 +1347,7 @@ export default function App() {
                     </div>
                     <span style={{ color:ACCENT, fontWeight:700 }}>{s.odometer.toLocaleString()} KM</span>
                   </div>
-                  <div style={{ fontSize:12, color:MUTED }}>{s.date} · RM {s.cost}{s.workshop?` · ${s.workshop}`:""}</div>
+                  <div style={{ fontSize:12, color:MUTED }}><strong style={{ fontWeight:800 }}>{formatDisplayDate(s.date)}</strong> · RM {s.cost}{s.workshop?` · ${s.workshop}`:""}</div>
                   {s.reminder_type && s.reminder_type!=="none" && <div style={{ fontSize:11, color:"#22c55e", marginTop:6 }}>Next reminder: {s.reminder_type==="mileage"?`${(s.reminder_km||0).toLocaleString()} KM`:s.reminder_type==="schedule"?`${s.reminder_months||0} month${s.reminder_months>1?"s":""}`:`${s.reminder_km?(s.reminder_km.toLocaleString()+" KM"):""}${s.reminder_km&&s.reminder_months?" or ":""}${s.reminder_months?(s.reminder_months+" month"+(s.reminder_months>1?"s":"")):""}`}</div>}
                   {s.notes && <div style={{ fontSize:12, color:SUBTLE, marginTop:6, borderTop:`1px solid ${BORDER}`, paddingTop:6 }}>{s.notes}</div>}
                   <div style={{ display:"flex", gap:6, justifyContent:"flex-end", marginTop:8 }}>
@@ -1692,8 +1713,7 @@ export default function App() {
             </select>
           </FF>
           <FF label="Service Type">
-            <ServiceTypePicker value={form.type} onChange={val=>setForm(f=>({ ...f, type:val }))} serviceTypes={serviceTypes} serviceCategories={serviceCategories} categoryId={form.service_category_id||""} onCategoryChange={val=>setForm(f=>({ ...f, service_category_id:val, type:"" }))} onAddType={addServiceType}/>
-          </FF>
+           <ServiceTypePicker value={form.type} onChange={val=>setForm(f=>({ ...f, type:val }))} serviceTypes={serviceTypes} serviceCategories={serviceCategories} categoryId={form.service_category_id||""} onCategoryChange={val=>setForm(f=>({ ...f, service_category_id:val }))} onAddType={addServiceType}/>          </FF>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <FF label="Date"><input type="date" style={IS} value={form.date||""} onChange={e=>setForm(f=>({ ...f, date:e.target.value }))}/></FF>
             <FF label="Odometer (KM)"><input type="number" style={IS} placeholder="e.g. 45000" value={form.odometer||""} onChange={e=>setForm(f=>({ ...f, odometer:e.target.value }))}/></FF>
