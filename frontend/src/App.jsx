@@ -85,30 +85,64 @@ function Spinner() {
 }
 
 // ─── Service Type Picker ──────────────────────────────────────────────────────
-function ServiceTypePicker({ value, onChange, serviceTypes, onAddType }) {
+function ServiceTypePicker({ value, onChange, serviceTypes, serviceCategories, categoryId, onCategoryChange, onAddType }) {
   const [adding, setAdding] = useState(false);
   const [newType, setNewType] = useState("");
+  const [newCategoryId, setNewCategoryId] = useState(categoryId || "");
+
+  useEffect(() => {
+    if (!adding) setNewCategoryId(categoryId || "");
+  }, [categoryId, adding]);
+
   async function handleAdd() {
     const t = newType.trim();
-    if (t) { await onAddType(t); onChange(t); }
-    setAdding(false); setNewType("");
+    if (!t) return;
+    if (!newCategoryId) { alert("Select a service category."); return; }
+    try {
+      await onAddType(t, parseInt(newCategoryId, 10));
+      onCategoryChange(newCategoryId);
+      onChange(t);
+      setAdding(false);
+      setNewType("");
+    } catch (e) { alert(e.message); }
   }
-  return adding ? (
-    <div style={{ display:"flex", gap:8 }}>
-      <input autoFocus type="text" style={{ ...IS, flex:1 }} placeholder="New service type..." value={newType}
-        onChange={e => setNewType(e.target.value)}
-        onKeyDown={e => { if (e.key==="Enter") handleAdd(); if (e.key==="Escape") setAdding(false); }}/>
-      <button onClick={handleAdd} style={{ background:ACCENT, border:"none", color:"#0a0f1e", borderRadius:8, padding:"0 14px", cursor:"pointer", fontWeight:700, flexShrink:0 }}>Add</button>
-      <button onClick={() => setAdding(false)} style={{ background:CARD, border:`1px solid #334155`, color:SUBTLE, borderRadius:8, padding:"0 10px", cursor:"pointer", flexShrink:0 }}>✕</button>
-    </div>
-  ) : (
-    <div style={{ display:"flex", gap:8 }}>
-      <select style={{ ...IS, flex:1 }} value={value||""} onChange={e => onChange(e.target.value)}>
-        <option value="">Select type...</option>
-        {serviceTypes.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+
+  if (adding) return (
+    <div>
+      <select style={{ ...IS, marginBottom:8 }} value={newCategoryId} onChange={e=>setNewCategoryId(e.target.value)}>
+        <option value="">Select category...</option>
+        {serviceCategories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-      <button onClick={() => setAdding(true)} style={{ background:"#1e3a5f", border:`1px solid #334155`, color:ACCENT, borderRadius:8, padding:"0 14px", cursor:"pointer", fontWeight:700, fontSize:20, flexShrink:0 }}>+</button>
+      <div style={{ display:"flex", gap:8 }}>
+        <input autoFocus type="text" style={{ ...IS, flex:1 }} placeholder="New service type..." value={newType}
+          onChange={e=>setNewType(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter") handleAdd(); if(e.key==="Escape") setAdding(false); }}/>
+        <button onClick={handleAdd} style={{ background:ACCENT, border:"none", color:"#0a0f1e", borderRadius:8, padding:"0 14px", cursor:"pointer", fontWeight:700 }}>Add</button>
+        <button onClick={()=>setAdding(false)} style={{ background:CARD, border:`1px solid #334155`, color:SUBTLE, borderRadius:8, padding:"0 10px", cursor:"pointer" }}>✕</button>
+      </div>
     </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8 }}>
+        <select style={{ ...IS, flex:1 }} value={value||""} onChange={e=>{
+          const selected = serviceTypes.find(type => type.name === e.target.value);
+          onChange(e.target.value);
+          if (selected) onCategoryChange(String(selected.category_id));
+        }}>
+          <option value="">Select service type...</option>
+          {serviceCategories.map(category => {
+            const types = serviceTypes.filter(type => String(type.category_id) === String(category.id));
+            return (
+              <optgroup key={category.id} label={category.name}>
+                {types.map(type=><option key={type.id} value={type.name}>— {type.name}</option>)}
+              </optgroup>
+            );
+          })}
+        </select>
+        <button onClick={()=>setAdding(true)} style={{ background:"#1e3a5f", border:`1px solid #334155`, color:ACCENT, borderRadius:8, padding:"0 14px", cursor:"pointer", fontWeight:700, fontSize:20 }}>+</button>
+      </div>    </div>
   );
 }
 
@@ -362,7 +396,13 @@ export default function App() {
   const [services,        setServices]        = useState([]);
   const [fuels,           setFuels]           = useState([]);
   const [reminders,       setReminders]       = useState([]);
+  const [serviceCategories, setServiceCategories] = useState([]);
   const [serviceTypes,    setServiceTypes]    = useState([]);
+  const [serviceTypeEdit, setServiceTypeEdit] = useState(null);
+  const [serviceTypeName, setServiceTypeName] = useState("");
+  const [serviceCategoryEdit, setServiceCategoryEdit] = useState(null);
+  const [serviceTypeDrafts, setServiceTypeDrafts] = useState([]);
+  const [serviceTypesEdit, setServiceTypesEdit] = useState(false);
   const [settings,        setSettings]        = useState({ fuel_price_per_l:"2.24" });
   const [loading,         setLoading]         = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -384,12 +424,12 @@ export default function App() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [v, s, f, r, st, cfg] = await Promise.all([
+      const [v, s, f, r, sc, st, cfg] = await Promise.all([
         api.getVehicles(), api.getServices(), api.getFuels(),
-        api.getReminders(), api.getServiceTypes(), api.getSettings(),
+        api.getReminders(), api.getServiceCategories(), api.getServiceTypes(), api.getSettings(),
       ]);
       setVehicles(v); setServices(s); setFuels(f);
-      setReminders(r); setServiceTypes(st); setSettings(cfg);
+      setReminders(r); setServiceCategories(sc); setServiceTypes(st); setSettings(cfg);
     } catch(e) {
       console.error(e);
     }
@@ -431,6 +471,7 @@ export default function App() {
       setServices([]);
       setFuels([]);
       setReminders([]);
+      setServiceCategories([]);
       setServiceTypes([]);
       setTab("dashboard");
     }
@@ -459,7 +500,7 @@ export default function App() {
     setForm(nextForm);
     setModal(type);
   }
-  function closeModal() { setModal(null); setForm({}); setEditTarget(null); setSaving(false); }
+  function closeModal() { setModal(null); setForm({}); setEditTarget(null); setSaving(false); setServiceTypeEdit(null); setServiceTypeName(""); setServiceCategoryEdit(null); setServiceTypesEdit(false); setServiceTypeDrafts([]); }
 
   async function withSave(fn) {
     setSaving(true);
@@ -492,7 +533,8 @@ export default function App() {
 
   function openServiceEdit(s) {
     setEditTarget(s.id);
-    setForm({ vehicle_id:String(s.vehicle_id), type:s.type, date:s.date, odometer:String(s.odometer||""), cost:String(s.cost||""), workshop:s.workshop||"", notes:s.notes||"", reminder_type:s.reminder_type||"none", reminder_km:s.reminder_km?String(s.reminder_km):"", reminder_months:s.reminder_months?String(s.reminder_months):"" });
+    const matchedType = serviceTypes.find(t => t.name === s.type);
+    setForm({ vehicle_id:String(s.vehicle_id), type:s.type, service_category_id:matchedType ? String(matchedType.category_id) : "", date:s.date, odometer:String(s.odometer||""), cost:String(s.cost||""), workshop:s.workshop||"", notes:s.notes||"", reminder_type:s.reminder_type||"none", reminder_km:s.reminder_km?String(s.reminder_km):"", reminder_months:s.reminder_months?String(s.reminder_months):"" });
     setModal("service-edit");
   }
 
@@ -556,8 +598,8 @@ export default function App() {
     }
   }
 
-  const addServiceType = async (name) => {
-    await api.createServiceType(name);
+  const addServiceType = async (name, category_id) => {
+    await api.createServiceType(name, category_id);
     const updated = await api.getServiceTypes();
     setServiceTypes(updated);
   };
@@ -565,6 +607,142 @@ export default function App() {
   const deleteServiceType = async (id) => {
     await api.deleteServiceType(id);
     setServiceTypes(p => p.filter(t=>t.id!==id));
+  };
+ 
+  const openServiceTypeEdit = (t) => {
+    setServiceTypeEdit(t);
+    setServiceTypeName(t.name);
+  };
+
+  const saveServiceTypeEdit = async () => {
+    const name = serviceTypeName.trim();
+    if (!name) { alert("Service type name is required."); return; }
+    try {
+      setSaving(true);
+      await api.updateServiceType(serviceTypeEdit.id, name);
+      setServiceTypes(await api.getServiceTypes());
+      setServiceTypeEdit(null);
+      setServiceTypeName("");
+    } catch(e) { alert(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const openServiceCategoryEdit = (category) => {
+    setServiceCategoryEdit(category);
+    setServiceTypeDrafts(
+      serviceTypes
+        .filter(type => String(type.category_id) === String(category.id))
+        .map(type => ({ id:type.id, name:type.name }))
+    );
+  };
+
+  const addServiceTypeDraft = () => {
+    setServiceTypeDrafts(drafts => [
+      ...drafts,
+      { id:`new-${Date.now()}`, name:"" },
+    ]);
+  };
+
+  const saveServiceCategoryEdit = async () => {
+    if (!serviceCategoryEdit) return;
+
+    const cleanDrafts = serviceTypeDrafts.map(type => ({ ...type, name:type.name.trim() }));
+    if (cleanDrafts.some(type => !type.name)) {
+      alert("Each service type needs a name, or remove the empty row.");
+      return;
+    }
+
+    const names = cleanDrafts.map(type => type.name.toLocaleLowerCase());
+    if (new Set(names).size !== names.length) {
+      alert("Service type names must be unique within this category.");
+      return;
+    }
+
+    const originalTypes = serviceTypes.filter(
+      type => String(type.category_id) === String(serviceCategoryEdit.id)
+    );
+    const remainingIds = new Set(cleanDrafts.filter(type => typeof type.id === "number").map(type => type.id));
+
+    try {
+      setSaving(true);
+      await Promise.all([
+        ...cleanDrafts
+          .filter(type => typeof type.id === "number")
+          .filter(type => originalTypes.find(original => original.id === type.id)?.name !== type.name)
+          .map(type => api.updateServiceType(type.id, type.name)),
+        ...cleanDrafts
+          .filter(type => typeof type.id !== "number")
+          .map(type => api.createServiceType(type.name, serviceCategoryEdit.id)),
+        ...originalTypes
+          .filter(type => !remainingIds.has(type.id))
+          .map(type => api.deleteServiceType(type.id)),
+      ]);
+      setServiceTypes(await api.getServiceTypes());
+      setServiceCategoryEdit(null);
+      setServiceTypeDrafts([]);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openServiceTypesEdit = () => {
+    setServiceTypeDrafts(serviceTypes.map(type => ({
+      id:type.id,
+      name:type.name,
+      category_id:type.category_id,
+    })));
+    setServiceTypesEdit(true);
+  };
+
+  const addServiceTypeDraftToCategory = (categoryId) => {
+    setServiceTypeDrafts(drafts => [
+      ...drafts,
+      { id:`new-${Date.now()}`, name:"", category_id:categoryId },
+    ]);
+  };
+
+  const saveAllServiceTypes = async () => {
+    const cleanDrafts = serviceTypeDrafts.map(type => ({ ...type, name:type.name.trim() }));
+    if (cleanDrafts.some(type => !type.name)) {
+      alert("Each service type needs a name, or remove the empty row.");
+      return;
+    }
+
+    for (const category of serviceCategories) {
+      const names = cleanDrafts
+        .filter(type => String(type.category_id) === String(category.id))
+        .map(type => type.name.toLocaleLowerCase());
+      if (new Set(names).size !== names.length) {
+        alert(`Service type names must be unique in ${category.name}.`);
+        return;
+      }
+    }
+
+    const remainingIds = new Set(cleanDrafts.filter(type => typeof type.id === "number").map(type => type.id));
+    try {
+      setSaving(true);
+      await Promise.all([
+        ...cleanDrafts
+          .filter(type => typeof type.id === "number")
+          .filter(type => serviceTypes.find(original => original.id === type.id)?.name !== type.name)
+          .map(type => api.updateServiceType(type.id, type.name)),
+        ...cleanDrafts
+          .filter(type => typeof type.id !== "number")
+          .map(type => api.createServiceType(type.name, type.category_id)),
+        ...serviceTypes
+          .filter(type => !remainingIds.has(type.id))
+          .map(type => api.deleteServiceType(type.id)),
+      ]);
+      setServiceTypes(await api.getServiceTypes());
+      setServiceTypesEdit(false);
+      setServiceTypeDrafts([]);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveSettings = async () => {
@@ -1288,20 +1466,28 @@ export default function App() {
             </div>
 
             <div style={{ background:CARD, borderRadius:14, padding:18, border:`1px solid ${BORDER}`,marginBottom:16 }}>
-              <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🔧 Service Types</div>
-              <div style={{ fontSize:13, color:MUTED, marginBottom:14 }}>Manage available service types across all forms.</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
-                {serviceTypes.map(t => (
-                  <div key={t.id} style={{ display:"flex", alignItems:"center", gap:10, background:BG, borderRadius:10, padding:"10px 14px" }}>
-                    <span style={{ flex:1, fontSize:14 }}>{t.name}</span>
-                    {t.is_default
-                      ? <span style={{ fontSize:11, color:MUTED }}>Default</span>
-                      : <button onClick={()=>deleteServiceType(t.id)} style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:6, padding:"3px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>Remove</button>
-                    }
-                  </div>
-                ))}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:14 }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:16, marginBottom:4 }}>🔧 Service Types</div>
+                  <div style={{ fontSize:13, color:MUTED }}>View service types by category. Use Edit to manage the full list.</div>
+                </div>
+                <button onClick={openServiceTypesEdit} style={{ background:"#1e3a5f", border:"none", color:ACCENT, borderRadius:7, padding:"7px 12px", cursor:"pointer", fontSize:12, fontWeight:700, flexShrink:0 }}>Edit</button>
               </div>
-              <ServiceTypePicker value="" onChange={()=>{}} serviceTypes={serviceTypes} onAddType={addServiceType}/>
+              <div style={{ background:BG, border:"1px solid #1e3a5f", borderRadius:10, padding:"0 12px" }}>
+                {serviceCategories.map(category => {
+                  const types = serviceTypes.filter(t=>String(t.category_id)===String(category.id));
+                  return (
+                    <div key={category.id} style={{ padding:"10px 0", borderBottom:`1px solid ${BORDER}` }}>
+                      <div style={{ color:ACCENT, fontSize:12, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:types.length ? 7 : 0 }}>{category.name}</div>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                        {types.length ? types.map(type => (
+                          <span key={type.id} style={{ background:"#16243a", border:"1px solid #28476d", color:TEXT, borderRadius:999, padding:"3px 8px", fontSize:12, lineHeight:1.35 }}>{type.name}</span>
+                        )) : <span style={{ color:MUTED, fontSize:12 }}>No service types</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* ── DATABASE BACKUP ── */}
@@ -1506,7 +1692,7 @@ export default function App() {
             </select>
           </FF>
           <FF label="Service Type">
-            <ServiceTypePicker value={form.type} onChange={val=>setForm(f=>({ ...f, type:val }))} serviceTypes={serviceTypes} onAddType={addServiceType}/>
+            <ServiceTypePicker value={form.type} onChange={val=>setForm(f=>({ ...f, type:val }))} serviceTypes={serviceTypes} serviceCategories={serviceCategories} categoryId={form.service_category_id||""} onCategoryChange={val=>setForm(f=>({ ...f, service_category_id:val, type:"" }))} onAddType={addServiceType}/>
           </FF>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <FF label="Date"><input type="date" style={IS} value={form.date||""} onChange={e=>setForm(f=>({ ...f, date:e.target.value }))}/></FF>
@@ -1521,6 +1707,100 @@ export default function App() {
           <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
             <Btn label="Cancel" onClick={closeModal} variant="secondary"/>
             <Btn label={saving?"Saving...":modal==="service-edit"?"Save Changes":"Save Record"} onClick={modal==="service-edit"?saveServiceEdit:saveService} disabled={saving}/>
+          </div>
+        </Modal>
+      )}
+
+      {serviceTypeEdit && (
+        <Modal title="Edit Service Type" onClose={()=>!saving && setServiceTypeEdit(null)}>
+          <FF label="Category">
+            <input type="text" style={{ ...IS, opacity:0.7 }} value={serviceTypeEdit.category||""} disabled />
+            <div style={{ color:MUTED, fontSize:11, marginTop:5 }}>Category is fixed and cannot be changed.</div>
+          </FF>
+          <FF label="Service Type">
+            <input autoFocus type="text" style={IS} value={serviceTypeName} onChange={e=>setServiceTypeName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter") saveServiceTypeEdit();}} />
+          </FF>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn label="Cancel" onClick={()=>setServiceTypeEdit(null)} variant="secondary" disabled={saving}/>
+            <Btn label={saving?"Saving...":"Save Changes"} onClick={saveServiceTypeEdit} disabled={saving}/>
+          </div>
+        </Modal>
+      )}
+
+      {serviceCategoryEdit && (
+        <Modal title={`Edit ${serviceCategoryEdit.name}`} onClose={()=>!saving && setServiceCategoryEdit(null)}>
+          <div style={{ color:MUTED, fontSize:13, lineHeight:1.5, marginBottom:16 }}>
+            Add, rename, or remove service types for this category. Your changes are saved together.
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:14 }}>
+            {serviceTypeDrafts.length === 0 && (
+              <div style={{ color:MUTED, fontSize:13, padding:"8px 0" }}>No service types in this category yet.</div>
+            )}
+            {serviceTypeDrafts.map(type => (
+              <div key={type.id} style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <input
+                  autoFocus={typeof type.id !== "number"}
+                  type="text"
+                  style={{ ...IS, flex:1 }}
+                  placeholder="Service type name"
+                  value={type.name}
+                  onChange={e=>setServiceTypeDrafts(drafts => drafts.map(draft => draft.id===type.id ? { ...draft, name:e.target.value } : draft))}
+                />
+                <button
+                  onClick={()=>setServiceTypeDrafts(drafts => drafts.filter(draft => draft.id!==type.id))}
+                  disabled={saving}
+                  style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:7, padding:"9px 10px", cursor:saving?"not-allowed":"pointer", fontSize:12, fontWeight:700 }}
+                >Remove</button>
+              </div>
+            ))}
+          </div>
+          <button onClick={addServiceTypeDraft} disabled={saving} style={{ width:"100%", background:"#1e3a5f", border:"1px solid #334155", color:ACCENT, borderRadius:8, padding:"10px 12px", cursor:saving?"not-allowed":"pointer", fontWeight:700, marginBottom:18 }}>+ Add Service Type</button>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn label="Cancel" onClick={()=>setServiceCategoryEdit(null)} variant="secondary" disabled={saving}/>
+            <Btn label={saving?"Saving...":"Save Changes"} onClick={saveServiceCategoryEdit} disabled={saving}/>
+          </div>
+        </Modal>
+      )}
+
+      {serviceTypesEdit && (
+        <Modal title="Edit Service Types" onClose={()=>!saving && setServiceTypesEdit(false)}>
+          <div style={{ color:MUTED, fontSize:13, lineHeight:1.5, marginBottom:16 }}>
+            Manage all service types below. They stay grouped by category, and all changes save together.
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:18, marginBottom:18 }}>
+            {serviceCategories.map(category => {
+              const types = serviceTypeDrafts.filter(type => String(type.category_id) === String(category.id));
+              return (
+                <div key={category.id} style={{ background:BG, border:"1px solid #1e3a5f", borderRadius:10, padding:12 }}>
+                  <div style={{ color:ACCENT, fontSize:12, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 }}>{category.name}</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:types.length ? 10 : 0 }}>
+                    {types.map(type => (
+                      <div key={type.id} style={{ display:"flex", gap:8, alignItems:"center" }}>
+                        <input
+                          autoFocus={typeof type.id !== "number"}
+                          type="text"
+                          style={{ ...IS, flex:1 }}
+                          placeholder="Service type name"
+                          value={type.name}
+                          onChange={e=>setServiceTypeDrafts(drafts => drafts.map(draft => draft.id===type.id ? { ...draft, name:e.target.value } : draft))}
+                        />
+                        <button
+                          onClick={()=>setServiceTypeDrafts(drafts => drafts.filter(draft => draft.id!==type.id))}
+                          disabled={saving}
+                          style={{ background:"#ef444422", border:"none", color:"#ef4444", borderRadius:7, padding:"9px 10px", cursor:saving?"not-allowed":"pointer", fontSize:12, fontWeight:700 }}
+                        >Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                  {types.length === 0 && <div style={{ color:MUTED, fontSize:12, marginBottom:10 }}>No service types yet.</div>}
+                  <button onClick={()=>addServiceTypeDraftToCategory(category.id)} disabled={saving} style={{ width:"100%", background:"#1e3a5f", border:"1px solid #334155", color:ACCENT, borderRadius:8, padding:"9px 10px", cursor:saving?"not-allowed":"pointer", fontWeight:700, fontSize:12 }}>+ Add service type</button>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+            <Btn label="Cancel" onClick={()=>setServiceTypesEdit(false)} variant="secondary" disabled={saving}/>
+            <Btn label={saving?"Saving...":"Save Changes"} onClick={saveAllServiceTypes} disabled={saving}/>
           </div>
         </Modal>
       )}
