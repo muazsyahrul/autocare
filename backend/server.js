@@ -241,7 +241,7 @@ app.post("/api/database/import", express.raw({
       );
     }
 
-    // Close temporary source database before backup.
+    // Close temporary source database before touching the live database.
     sourceDb.close();
     sourceDb = null;
 
@@ -251,27 +251,38 @@ app.post("/api/database/import", express.raw({
     // Create automatic safety backup BEFORE importing.
     await db.backup(safetyBackupPath);
 
-    // Open the uploaded database again.
-    sourceDb = new Database(tempPath, {
-      readonly: true,
-      fileMustExist: true
-    });
+    // IMPORTANT:
+    // db.js keeps one long-lived better-sqlite3 connection open to DB_PATH.
+    // Do not replace DB_PATH while that connection is still open.
+    db.close();
 
-    // Restore uploaded DB into the existing live DB.
-    await sourceDb.backup(DB_PATH);
+    // Remove SQLite WAL/SHM sidecar files before replacing the database.
+    for (const sidecar of [`${DB_PATH}-wal`, `${DB_PATH}-shm`]) {
+      try {
+        if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+      } catch (sidecarError) {
+        console.warn(`Could not remove SQLite sidecar ${sidecar}:`, sidecarError.message);
+      }
+    }
 
-    sourceDb.close();
-    sourceDb = null;
+    // Replace the live database with the validated uploaded database.
+    fs.copyFileSync(tempPath, DB_PATH);
 
     // Remove temporary upload.
     if (fs.existsSync(tempPath)) {
       fs.unlinkSync(tempPath);
     }
 
-    return ok(res, {
+    const result = {
       message: "Database imported successfully",
       backup: path.basename(safetyBackupPath)
-    });
+    };
+
+    // Send the success response first. Docker Compose has restart: unless-stopped,
+    // so exiting the backend lets Docker reopen db.js against the imported file.
+    ok(res, result);
+    setTimeout(() => process.exit(0), 250);
+    return;
 
   } catch (e) {
     console.error("Database import failed:", e);
@@ -732,190 +743,3 @@ app.put("/api/settings", (req, res) => {
 app.get("/api/health", (req, res) => ok(res, { status: "ok" }));
 
 app.listen(PORT, () => console.log(`AutoCare API running on port ${PORT}`));
-
-
-// ─── Database Export ──────────────────────────────────────────────────────────
-// Exports the actual SQLite database, not JSON.
-app.post("/api/database/export", (req, res) => {
-  const password = String(req.body?.password || "");
-
-  if (!verifyDatabasePassword(password)) {
-    return err(res, "Invalid password", 401);
-  }
-
-  if (!fs.existsSync(DB_PATH)) {
-    return err(res, "Database file not found", 404);
-  }
-
-  const tempPath = path.join(
-    os.tmpdir(),
-    `autocare-export-${Date.now()}.db`
-  );
-
-  try {
-    // Flush SQLite WAL data and create a clean standalone backup.
-    db.pragma("wal_checkpoint(TRUNCATE)");
-
-    // SQLite backup creates a consistent copy of the live database.
-    db.backup(tempPath)
-      .then(() => {
-        res.download(
-          tempPath,
-          "garage.db",
-          {
-            headers: {
-              "Content-Type": "application/x-sqlite3",
-              "Content-Disposition": 'attachment; filename="garage.db"',
-            },
-          },
-          (downloadError) => {
-            try {
-              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            } catch {}
-
-            if (downloadError && !res.headersSent) {
-              return err(res, "Failed to export database", 500);
-            }
-          }
-        );
-      })
-      .catch((e) => {
-        try {
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        } catch {}
-
-        console.error("Database export failed:", e);
-        return err(res, "Failed to export database", 500);
-      });
-
-  } catch (e) {
-    try {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-    } catch {}
-
-    console.error("Database export failed:", e);
-    return err(res, "Failed to export database", 500);
-  }
-});
-
-// ─── Database Import ──────────────────────────────────────────────────────────
-// Accepts an actual SQLite .db file and restores it into the live database.
-app.post("/api/database/import", express.raw({
-  type: "application/octet-stream",
-  limit: "100mb"
-}), async (req, res) => {
-  const password = String(req.headers["x-autocare-password"] || "");
-
-  if (!verifyDatabasePassword(password)) {
-    return err(res, "Invalid password", 401);
-  }
-
-  if (!req.body || !Buffer.isBuffer(req.body) || req.body.length < 16) {
-    return err(res, "Invalid database file");
-  }
-
-  const tempPath = path.join(
-    os.tmpdir(),
-    `autocare-import-${Date.now()}.db`
-  );
-
-  const safetyBackupPath = path.join(
-    path.dirname(DB_PATH),
-    `garage-before-import-${new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")}.db`
-  );
-
-  let sourceDb = null;
-
-  try {
-    // Save uploaded database to a temporary file.
-    fs.writeFileSync(tempPath, req.body);
-
-    // Verify it is actually SQLite.
-    if (!isSQLiteDatabase(tempPath)) {
-      return err(res, "The selected file is not a valid SQLite database");
-    }
-
-    // Open the uploaded database to make sure SQLite can actually read it.
-    sourceDb = new Database(tempPath, {
-      readonly: true,
-      fileMustExist: true
-    });
-
-    // Basic SQLite integrity check.
-    const integrity = sourceDb
-      .prepare("PRAGMA integrity_check")
-      .get();
-
-    if (!integrity || integrity.integrity_check !== "ok") {
-      return err(res, "Database integrity check failed");
-    }
-
-    // Make sure this is an AutoCare database.
-    const tables = sourceDb.prepare(`
-      SELECT name
-      FROM sqlite_master
-      WHERE type='table'
-        AND name IN ('vehicles','services','fuels','settings')
-    `).all();
-
-    if (tables.length < 4) {
-      return err(
-        res,
-        "This does not appear to be a valid AutoCare database"
-      );
-    }
-
-    // Close temporary source database before backup.
-    sourceDb.close();
-    sourceDb = null;
-
-    // Flush current database.
-    db.pragma("wal_checkpoint(TRUNCATE)");
-
-    // Create automatic safety backup BEFORE importing.
-    await db.backup(safetyBackupPath);
-
-    // Open the uploaded database again.
-    sourceDb = new Database(tempPath, {
-      readonly: true,
-      fileMustExist: true
-    });
-
-    // Restore uploaded DB into the existing live DB.
-    await sourceDb.backup(DB_PATH);
-
-    sourceDb.close();
-    sourceDb = null;
-
-    // Remove temporary upload.
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
-    }
-
-    return ok(res, {
-      message: "Database imported successfully",
-      backup: path.basename(safetyBackupPath)
-    });
-
-  } catch (e) {
-    console.error("Database import failed:", e);
-
-    try {
-      if (sourceDb) sourceDb.close();
-    } catch {}
-
-    try {
-      if (fs.existsSync(tempPath)) {
-        fs.unlinkSync(tempPath);
-      }
-    } catch {}
-
-    return err(
-      res,
-      `Database import failed: ${e.message}`,
-      500
-    );
-  }
-});
