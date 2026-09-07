@@ -20,10 +20,16 @@ db.exec(`
     created_at TEXT   DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS service_categories (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
   CREATE TABLE IF NOT EXISTS service_types (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    name      TEXT    NOT NULL UNIQUE,
-    is_default INTEGER DEFAULT 0
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,
+    category_id INTEGER NOT NULL DEFAULT 1
   );
 
   CREATE TABLE IF NOT EXISTS services (
@@ -92,37 +98,178 @@ addColumnIfMissing("reminders", "source_service_id", "INTEGER DEFAULT NULL");
 addColumnIfMissing("reminders", "reminder_type", "TEXT NOT NULL DEFAULT 'legacy'");
 addColumnIfMissing("reminders", "interval_km", "INTEGER DEFAULT NULL");
 addColumnIfMissing("reminders", "interval_months", "INTEGER DEFAULT NULL");
+addColumnIfMissing("service_types","category_id","INTEGER NOT NULL DEFAULT 1");
 
 db.exec(`CREATE INDEX IF NOT EXISTS idx_reminders_source_service ON reminders(source_service_id)`);
 
-// ─── Seed default service types ───────────────────────────────────────────────
-const defaults = [
-  "Oil Change",
-  "Oil Filter",
-  "Air Filter",
-  "Cabin Air Filter",
-  "Coolant",
-  "Brake Fluid",
-  "Brake Pads",
-  "Spark Plugs",
-  "Battery",
-  "Transmission Oil",
-  "CVT Oil",
-  "Fuel Filter",
-  "Tyre Rotation",
-  "Tyre Repair / Fix",
-  "Wheel Alignment",
-  "Wheel Balancing",
-  "Wiper",
-  "Timing Belt",
-  "Aircon Filter",
-  "Aircon Gas"
+// ─── Fixed service categories ────────────────────────────────────────────────
+const categories = [
+  "Engine & Oil",
+  "Transmission",
+  "Cooling System",
+  "Air Conditioning",
+  "Brakes",
+  "Suspension & Steering",
+  "Tyres & Alignment",
+  "Battery & Electrical",
+  "Fuel System",
+  "Engine Intake & Exhaust",
+  "Belts & Timing",
+  "Lights",
+  "Wipers & Washer",
+  "Body & Exterior",
+  "Interior",
+  "General Maintenance",
+  "Parts & Accessories",
+  "Legal & Insurance",
+  "Other"
 ];
 
-const insertType = db.prepare(
-  "INSERT OR IGNORE INTO service_types (name, is_default) VALUES (?, 1)"
+const insertCategory = db.prepare(`
+  INSERT OR IGNORE INTO service_categories (name, sort_order)
+  VALUES (?, ?)
+`);
+
+categories.forEach((name, index) => {
+  insertCategory.run(name, index + 1);
+});
+
+// ─── Assign existing service types to a category ─────────────────────────────
+const categoryMap = {
+  "Oil Change": "Engine & Oil",
+  "Oil Filter": "Engine & Oil",
+  "Oil Sump": "Engine & Oil",
+  "Dipstick": "Engine & Oil",
+  "Gasket": "Engine & Oil",
+
+  "Transmission": "Transmission",
+  "Transmission Oil": "Transmission",
+  "Transmission Oil CVT": "Transmission",
+  "Transmission Treatment Oil": "Transmission",
+  "Filter Auto CVT": "Transmission",
+  "Gasket CVT": "Transmission",
+  "CVT Adaptation": "Transmission",
+
+  "Coolant": "Cooling System",
+  "Radiator": "Cooling System",
+  "Radiator Cap": "Cooling System",
+  "Radiator Fan Motor": "Cooling System",
+  "Thermostat": "Cooling System",
+  "Water Pump": "Cooling System",
+
+  "Aircon Blower Motor": "Air Conditioning",
+  "Aircon Compressor": "Air Conditioning",
+  "Aircon Compressor Oil": "Air Conditioning",
+  "Aircon Cooling Coil": "Air Conditioning",
+  "Aircon Evaporator Coil": "Air Conditioning",
+  "Aircon Expansion Valve": "Air Conditioning",
+  "Aircon Filter": "Air Conditioning",
+  "Aircon Gas": "Air Conditioning",
+  "Aircon Pipe": "Air Conditioning",
+  "Aircon Receiver Drier": "Air Conditioning",
+
+  "Break Pad": "Brakes",
+  "Brake Pad": "Brakes",
+  "Break Shoe": "Brakes",
+  "Break Wheel Cylinder": "Brakes",
+  "Brake Fluid": "Brakes",
+  "Brake Master Pump": "Brakes",
+  "Brake Lights": "Brakes",
+
+  "Absorber": "Suspension & Steering",
+  "Absorber Mounting": "Suspension & Steering",
+  "Lower Arm": "Suspension & Steering",
+  "Mounting": "Suspension & Steering",
+  "Stabilizer Link": "Suspension & Steering",
+  "Suspension Link": "Suspension & Steering",
+  "Steering Bush": "Suspension & Steering",
+  "Power Steering": "Suspension & Steering",
+  "Power Steering Fluid": "Suspension & Steering",
+  "Power Steering Tabung": "Suspension & Steering",
+
+  "Tire": "Tyres & Alignment",
+  "Tire fix": "Tyres & Alignment",
+  "Rotate Tires": "Tyres & Alignment",
+  "Tyre Rotation": "Tyres & Alignment",
+  "Alignment": "Tyres & Alignment",
+  "Alignment & Balancing": "Tyres & Alignment",
+  "Balancing": "Tyres & Alignment",
+  "Camber": "Tyres & Alignment",
+
+  "Battery": "Battery & Electrical",
+  "Battery Check": "Battery & Electrical",
+  "Battery Terminal Protector": "Battery & Electrical",
+  "Battery Water 1L": "Battery & Electrical",
+  "Starter": "Battery & Electrical",
+  "Relay Starter": "Battery & Electrical",
+  "ICM Relay": "Battery & Electrical",
+
+  "Fuel Filter": "Fuel System",
+  "Fuel Injector - Optional": "Fuel System",
+  "Fuel Pump Assembly": "Fuel System",
+  "Fuel Pump Motor": "Fuel System",
+  "Injector Cleaner": "Fuel System",
+
+  "Air Filter": "Engine Intake & Exhaust",
+  "Airflow Inlet Manifold": "Engine Intake & Exhaust",
+  "Throttle Body Cleaner (100ml)": "Engine Intake & Exhaust",
+  "Exhaust": "Engine Intake & Exhaust",
+
+  "Timing Belt": "Belts & Timing",
+  "Timing Belts": "Belts & Timing",
+  "Belt": "Belts & Timing",
+  "Bearing": "Belts & Timing",
+  "Bearing: Tensioner Bearing": "Belts & Timing",
+  "Seal Belt Cover": "Belts & Timing",
+
+  "Headlights": "Lights",
+  "Fog Lights": "Lights",
+  "Tail Lights": "Lights",
+  "Lampu Boot": "Lights",
+  "Cabin Lights": "Lights",
+
+  "Windshield Wipers": "Wipers & Washer",
+  "Wiper Water Pump": "Wipers & Washer",
+  "Front Wiper Nozzle": "Wipers & Washer",
+
+  "Bodyworks": "Body & Exterior",
+  "Tinted": "Body & Exterior",
+  "Rear View Mirror": "Body & Exterior",
+  "Headlight Housing": "Body & Exterior",
+  "Trunk Lid Garnish": "Body & Exterior",
+  "Windshield-Front": "Body & Exterior",
+
+  "Carpet": "Interior",
+  "Glove Box Latch": "Interior",
+  "Getah Pintu": "Interior",
+  "Door sensor": "Interior",
+
+  "Engine Flushing - Optional": "General Maintenance",
+  "Workmanship": "General Maintenance",
+  "Updated Mileage": "General Maintenance",
+
+  "Plate": "Parts & Accessories",
+
+  "Insurance": "Legal & Insurance",
+  "Roadtax": "Legal & Insurance",
+  "Tax": "Legal & Insurance"
+};
+
+const getCategory = db.prepare(
+  "SELECT id FROM service_categories WHERE name=?"
 );
-for (const name of defaults) insertType.run(name);
+
+const updateTypeCategory = db.prepare(
+  "UPDATE service_types SET category_id=? WHERE name=?"
+);
+
+for (const [typeName, categoryName] of Object.entries(categoryMap)) {
+  const category = getCategory.get(categoryName);
+
+  if (category) {
+    updateTypeCategory.run(category.id, typeName);
+  }
+}
 
 // ─── Seed default settings ────────────────────────────────────────────────────
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run("fuel_price_per_l", "2.24");
