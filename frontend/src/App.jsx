@@ -74,7 +74,7 @@ function FF({ label, children }) {
 function Btn({ label, onClick, variant="primary", disabled=false }) {
   return (
     <button onClick={onClick} disabled={disabled}
-      style={{ padding:"10px 18px", borderRadius:10, border:"none", cursor:disabled?"not-allowed":"pointer", fontWeight:700, fontSize:13, opacity:disabled?0.5:1,
+      style={{ padding:"12px 18px", minHeight:44, borderRadius:10, border:"none", cursor:disabled?"not-allowed":"pointer", fontWeight:700, fontSize:13, opacity:disabled?0.5:1,
         background: variant==="primary" ? ACCENT : variant==="danger" ? "#ef444422" : CARD,
         color:       variant==="primary" ? "#0a0f1e" : variant==="danger" ? "#ef4444" : TEXT }}>
       {label}
@@ -310,31 +310,500 @@ function calculateFuelIntervals(data) {
   return intervals;
 }
 
-// ─── Mini Fuel Chart ──────────────────────────────────────────────────────────
+// ─── Fuel Efficiency Trend ────────────────────────────────────────────────────
 function FuelChart({ data }) {
-  if (data.length < 2) return <div style={{ color:MUTED, fontSize:13, padding:"16px 0" }}>Need 2+ fill-ups to show trend</div>;
+  if (data.length < 2) {
+    return (
+      <div style={{
+        background:BG,
+        borderRadius:12,
+        padding:"18px 16px",
+        border:`1px solid ${BORDER}`,
+        color:MUTED,
+        fontSize:13
+      }}>
+        Need 2+ fill-ups to show fuel efficiency.
+      </div>
+    );
+  }
+
   const effs = calculateFuelIntervals(data);
-  if (!effs.length) return <div style={{ color:MUTED, fontSize:13 }}>Not enough full tank data</div>;
-  const maxE=Math.max(...effs.map(e=>e.eff)), minE=Math.min(...effs.map(e=>e.eff));
-  const W=280, H=80, pad=10;
-  const xStep = effs.length>1 ? (W-pad*2)/(effs.length-1) : W-pad*2;
-  const yS = v => H-pad-((v-minE)/(maxE-minE+0.001))*(H-pad*2);
-  const pathD = effs.map((e,i)=>`${i===0?"M":"L"} ${pad+i*xStep} ${yS(e.eff)}`).join(" ");
+  if (!effs.length) {
+    return (
+      <div style={{
+        background:BG,
+        borderRadius:12,
+        padding:"18px 16px",
+        border:`1px solid ${BORDER}`,
+        color:MUTED,
+        fontSize:13
+      }}>
+        Not enough full-tank data to calculate consumption.
+      </div>
+    );
+  }
+
+  // Average of each full-to-full interval.
+  // Keep the same calculation used by the original app.
+  const avg = effs.reduce((sum, e) => sum + e.eff, 0) / effs.length;
+
+  const values = effs.map(e => e.eff);
+  const minRaw = Math.min(...values);
+  const maxRaw = Math.max(...values);
+
+  // Give the chart some breathing room so points do not sit on the border.
+  const spread = Math.max(maxRaw - minRaw, 1);
+  const minE = Math.max(0, Math.floor((minRaw - spread * 0.18) * 2) / 2);
+  const maxE = Math.ceil((maxRaw + spread * 0.18) * 2) / 2;
+  const range = Math.max(maxE - minE, 1);
+
+  const W = 420;
+  const H = 190;
+  const left = 42;
+  const right = 14;
+  const top = 18;
+  const bottom = 30;
+  const chartW = W - left - right;
+  const chartH = H - top - bottom;
+
+  const xStep = effs.length > 1 ? chartW / (effs.length - 1) : 0;
+  const x = i => left + i * xStep;
+  const y = value => top + ((maxE - value) / range) * chartH;
+
+  const pathD = effs.map((e, i) =>
+    `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(e.eff).toFixed(1)}`
+  ).join(" ");
+
+  const areaD =
+    `${pathD} L ${x(effs.length - 1).toFixed(1)} ${top + chartH} ` +
+    `L ${x(0).toFixed(1)} ${top + chartH} Z`;
+
+  const gridCount = 4;
+  const gridValues = Array.from({ length:gridCount + 1 }, (_, i) =>
+    maxE - (range / gridCount) * i
+  );
+
+  const labelStep = effs.length <= 8
+    ? 1
+    : Math.ceil(effs.length / 6);
+
   return (
     <div>
-      <svg width={W} height={H} style={{ overflow:"visible" }}>
-        <defs>
-          <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={ACCENT} stopOpacity="0.3"/>
-            <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <path d={`${pathD} L ${pad+(effs.length-1)*xStep} ${H} L ${pad} ${H} Z`} fill="url(#lg)"/>
-        <path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        {effs.map((e,i) => <circle key={i} cx={pad+i*xStep} cy={yS(e.eff)} r="3" fill={ACCENT}/>)}
-      </svg>
-      <div style={{ color:SUBTLE, fontSize:11, marginTop:4 }}>
-        Avg: {(effs.reduce((s,e)=>s+e.eff,0)/effs.length).toFixed(1)} KM/L
+      {/* Prominent average */}
+      <div style={{
+        display:"flex",
+        alignItems:"flex-end",
+        justifyContent:"space-between",
+        gap:12,
+        marginBottom:12
+      }}>
+        <div>
+          <div style={{
+            fontSize:11,
+            color:MUTED,
+            fontWeight:700,
+            textTransform:"uppercase",
+            letterSpacing:"0.08em",
+            marginBottom:3
+          }}>
+            Average Consumption
+          </div>
+          <div style={{
+            fontSize:34,
+            lineHeight:1,
+            fontWeight:900,
+            color:ACCENT,
+            letterSpacing:"-0.03em"
+          }}>
+            {avg.toFixed(1)}
+            <span style={{
+              fontSize:15,
+              fontWeight:700,
+              color:SUBTLE,
+              marginLeft:5
+            }}>
+              KM/L
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          color:MUTED,
+          fontSize:11,
+          textAlign:"right",
+          lineHeight:1.4
+        }}>
+          {effs.length} measured<br />
+          full-to-full intervals
+        </div>
+      </div>
+
+      {/* Responsive chart */}
+      <div style={{
+        width:"100%",
+        overflowX:"auto",
+        overflowY:"hidden",
+        paddingBottom:2
+      }}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          width="100%"
+          height="190"
+          preserveAspectRatio="none"
+          style={{ display:"block", minWidth:280 }}
+        >
+          <defs>
+            <linearGradient id="fuelTrendGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.30"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.02"/>
+            </linearGradient>
+          </defs>
+
+          {/* Grid + Y labels */}
+          {gridValues.map((value, i) => {
+            const gy = y(value);
+            return (
+              <g key={i}>
+                <line
+                  x1={left}
+                  y1={gy}
+                  x2={W - right}
+                  y2={gy}
+                  stroke={BORDER}
+                  strokeWidth="1"
+                  strokeDasharray={i === gridCount ? "0" : "4 5"}
+                />
+                <text
+                  x={left - 7}
+                  y={gy + 4}
+                  textAnchor="end"
+                  fill={SUBTLE}
+                  fontSize="10"
+                >
+                  {value.toFixed(1)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Filled area */}
+          <path d={areaD} fill="url(#fuelTrendGradient)" />
+
+          {/* Average line */}
+          <line
+            x1={left}
+            y1={y(avg)}
+            x2={W - right}
+            y2={y(avg)}
+            stroke={ACCENT}
+            strokeOpacity="0.35"
+            strokeWidth="1"
+            strokeDasharray="5 5"
+          />
+
+          {/* Trend line */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke={ACCENT}
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Points */}
+          {effs.map((e, i) => (
+            <g key={i}>
+              <circle
+                cx={x(i)}
+                cy={y(e.eff)}
+                r="5"
+                fill={CARD}
+                stroke={ACCENT}
+                strokeWidth="2.5"
+              />
+              {effs.length <= 12 && (
+                <text
+                  x={x(i)}
+                  y={Math.max(12, y(e.eff) - 9)}
+                  textAnchor="middle"
+                  fill={TEXT}
+                  fontSize="10"
+                  fontWeight="700"
+                >
+                  {e.eff.toFixed(1)}
+                </text>
+              )}
+            </g>
+          ))}
+
+          {/* X labels */}
+          {effs.map((e, i) => {
+            if (i % labelStep !== 0 && i !== effs.length - 1) return null;
+            const label = e.date
+              ? new Date(`${e.date}T00:00:00`).toLocaleDateString("en-GB", {
+                  day:"2-digit",
+                  month:"2-digit"
+                })
+              : "";
+            return (
+              <text
+                key={`label-${i}`}
+                x={x(i)}
+                y={H - 8}
+                textAnchor="middle"
+                fill={SUBTLE}
+                fontSize="9"
+              >
+                {label}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div style={{
+        display:"flex",
+        justifyContent:"space-between",
+        gap:10,
+        marginTop:8,
+        paddingTop:9,
+        borderTop:`1px solid ${BORDER}`,
+        color:MUTED,
+        fontSize:11
+      }}>
+        <span>Lower KM/L = higher fuel use</span>
+        <span style={{ color:ACCENT, fontWeight:700 }}>
+          Latest: {effs[effs.length - 1].eff.toFixed(1)} KM/L
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Estimated Empty Fuel ────────────────────────────────────────────────────
+function FuelRangeCard({ data }) {
+  if (!data.length) return null;
+
+  const pts = [...data].sort((a,b) => {
+    const dateDiff = new Date(a.date) - new Date(b.date);
+    return dateDiff || Number(a.id || 0) - Number(b.id || 0);
+  });
+
+  const latest = pts[pts.length - 1];
+  const liters = Number(latest?.liters) || 0;
+  const odo = Number(latest?.odometer) || 0;
+
+  // Use the same arithmetic average shown in the fuel chart.
+  const effs = calculateFuelIntervals(data);
+  const avg = effs.length
+    ? effs.reduce((sum, e) => sum + e.eff, 0) / effs.length
+    : 0;
+
+  if (!liters || !odo || !avg) {
+    return (
+      <div style={{
+        background:CARD,
+        borderRadius:14,
+        padding:"14px 16px",
+        border:`1px solid ${BORDER}`,
+        marginBottom:16
+      }}>
+        <div style={{
+          fontSize:12,
+          color:MUTED,
+          fontWeight:800,
+          textTransform:"uppercase",
+          letterSpacing:"0.07em"
+        }}>
+          Estimated Empty
+        </div>
+        <div style={{ color:MUTED, fontSize:12, marginTop:5 }}>
+          Need enough full-tank data to estimate empty mileage.
+        </div>
+      </div>
+    );
+  }
+
+  const estimatedRange = liters * avg;
+  const estimatedEmptyOdo = odo + estimatedRange;
+
+  return (
+    <div style={{
+      background:CARD,
+      borderRadius:14,
+      padding:"14px 16px",
+      border:`1px solid ${ACCENT}55`,
+      marginBottom:16
+    }}>
+      <div style={{
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"space-between",
+        gap:10
+      }}>
+        <div style={{
+          fontSize:12,
+          color:MUTED,
+          fontWeight:800,
+          textTransform:"uppercase",
+          letterSpacing:"0.07em"
+        }}>
+          Estimated Empty
+        </div>
+        <div style={{
+          color:ACCENT,
+          fontSize:10,
+          fontWeight:800,
+          border:`1px solid ${ACCENT}44`,
+          borderRadius:999,
+          padding:"3px 7px"
+        }}>
+          ESTIMATE
+        </div>
+      </div>
+
+      <div style={{
+        display:"flex",
+        alignItems:"baseline",
+        justifyContent:"space-between",
+        gap:12,
+        marginTop:8
+      }}>
+        <div>
+          <div style={{
+            fontSize:10,
+            color:MUTED,
+            fontWeight:700,
+            textTransform:"uppercase",
+            letterSpacing:"0.05em"
+          }}>
+            Last mileage before empty
+          </div>
+          <div style={{
+            color:ACCENT,
+            fontSize:29,
+            lineHeight:1.05,
+            fontWeight:900,
+            marginTop:2,
+            letterSpacing:"-0.02em"
+          }}>
+            {Math.round(estimatedEmptyOdo).toLocaleString()}
+            <span style={{
+              color:SUBTLE,
+              fontSize:13,
+              marginLeft:4,
+              letterSpacing:0
+            }}>
+              KM
+            </span>
+          </div>
+        </div>
+
+        <div style={{
+          textAlign:"right",
+          color:TEXT,
+          fontSize:12,
+          lineHeight:1.45,
+          whiteSpace:"nowrap"
+        }}>
+          <div>
+            Range <strong>{Math.round(estimatedRange).toLocaleString()} KM</strong>
+          </div>
+          <div style={{ color:MUTED }}>
+            {liters.toFixed(1)} L × {avg.toFixed(1)} KM/L
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Compact Fuel Overview (All Vehicles) ─────────────────────────────────────
+function FuelOverviewCard({ vehicle, data }) {
+  const pts = [...data].sort((a,b) => {
+    const dateDiff = new Date(a.date) - new Date(b.date);
+    return dateDiff || Number(a.id || 0) - Number(b.id || 0);
+  });
+
+  const latest = pts[pts.length - 1];
+  const liters = Number(latest?.liters) || 0;
+  const odo = Number(latest?.odometer) || 0;
+
+  const effs = calculateFuelIntervals(data);
+  const avg = effs.length
+    ? effs.reduce((sum, e) => sum + e.eff, 0) / effs.length
+    : 0;
+
+  const range = liters && avg ? liters * avg : 0;
+  const emptyOdo = odo && range ? odo + range : 0;
+
+  return (
+    <div style={{
+      background:CARD,
+      borderRadius:13,
+      padding:"13px 12px",
+      border:`1px solid ${BORDER}`,
+      minWidth:0
+    }}>
+      <div style={{
+        display:"flex",
+        alignItems:"center",
+        gap:7,
+        marginBottom:7,
+        minWidth:0
+      }}>
+        <span style={{
+          width:8,
+          height:8,
+          borderRadius:"50%",
+          background:vehicle.color,
+          flexShrink:0
+        }}/>
+        <div style={{
+          fontSize:13,
+          fontWeight:800,
+          overflow:"hidden",
+          textOverflow:"ellipsis",
+          whiteSpace:"nowrap"
+        }}>
+          {vehicle.name}
+        </div>
+      </div>
+
+      <div style={{
+        fontSize:24,
+        lineHeight:1,
+        fontWeight:900,
+        color:ACCENT,
+        marginBottom:8
+      }}>
+        {avg ? avg.toFixed(1) : "—"}
+        <span style={{
+          fontSize:11,
+          color:SUBTLE,
+          marginLeft:3,
+          fontWeight:700
+        }}>
+          KM/L
+        </span>
+      </div>
+
+      <div style={{
+        fontSize:10,
+        color:MUTED,
+        lineHeight:1.5
+      }}>
+        <div>
+          Empty <strong style={{ color:TEXT }}>
+            {emptyOdo ? `${Math.round(emptyOdo).toLocaleString()} KM` : "—"}
+          </strong>
+        </div>
+        <div>
+          Range <strong style={{ color:TEXT }}>
+            {range ? `${Math.round(range).toLocaleString()} KM` : "—"}
+          </strong>
+        </div>
       </div>
     </div>
   );
@@ -929,9 +1398,27 @@ export default function App() {
 
   // ── Nav ──
   const tabBtn = (id, icon, label) => (
-    <button onClick={()=>setTab(id)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, padding:"10px 0", flex:1, background:"none", border:"none", cursor:"pointer", color:tab===id?ACCENT:MUTED, borderTop:tab===id?`2px solid ${ACCENT}`:"2px solid transparent", transition:"all 0.2s" }}>
-      <span style={{ fontSize:20 }}>{icon}</span>
-      <span style={{ fontSize:11, fontWeight:600 }}>{label}</span>
+    <button
+      onClick={()=>setTab(id)}
+      style={{
+        display:"flex",
+        flexDirection:"column",
+        alignItems:"center",
+        justifyContent:"center",
+        gap:5,
+        padding:"12px 0",
+        minHeight:76,
+        flex:1,
+        background:"none",
+        border:"none",
+        cursor:"pointer",
+        color:tab===id?ACCENT:MUTED,
+        borderTop:tab===id?`2px solid ${ACCENT}`:"2px solid transparent",
+        transition:"all 0.2s"
+      }}
+    >
+      <span style={{ fontSize:23, lineHeight:1 }}>{icon}</span>
+      <span style={{ fontSize:12, fontWeight:600 }}>{label}</span>
     </button>
   );
 
@@ -1103,7 +1590,7 @@ export default function App() {
     <div style={{ background:BG, minHeight:"100vh", fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
 
       {/* Header */}
-      <div style={{ background:SURF, borderBottom:`1px solid ${BORDER}`, padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100 }}>
+      <div style={{ background:SURF, borderBottom:`1px solid ${BORDER}`, padding:"20px 20px", minHeight:76, display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100 }}>
         <div>
           <div style={{ fontSize:11, color:MUTED, fontWeight:600, letterSpacing:"0.1em", textTransform:"uppercase" }}>AutoCare</div>
           <div style={{ fontSize:20, fontWeight:800, lineHeight:1.2 }}>My Fleet</div>
@@ -1115,7 +1602,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ flex:1, overflowY:"auto", padding:"16px 16px 80px" }}>
+      <div style={{ flex:1, overflowY:"auto", padding:"16px 16px 96px" }}>
 
         {/* ── DASHBOARD ── */}
         {tab==="dashboard" && (
@@ -1240,6 +1727,8 @@ export default function App() {
                 <FuelChart data={vFuels}/>
               </div>
 
+              <FuelRangeCard data={vFuels}/>
+
               {/* Alerts for this vehicle */}
                {(() => {
                  const vAlerts = reminders
@@ -1256,7 +1745,7 @@ export default function App() {
                    .sort((a,b) => reminderUrgency(a) - reminderUrgency(b));
                  return (
                    <div style={{ marginBottom:16 }}>
-                     <SecTitle t="Alerts"/>
+                     <SecTitle t="Reminders"/>
                      {vAlerts.length === 0 ? (
                        <div style={{
                          background:CARD,
@@ -1266,7 +1755,7 @@ export default function App() {
                          color:"#22c55e",
                          fontSize:13
                        }}>
-                         ✓ No alerts
+                         ✓ No reminders
                        </div>
                      ) : (
                        <div>
@@ -1401,17 +1890,83 @@ export default function App() {
                 {vehicles.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </div>
-            {vehicles.filter(v=>filterVehicle==="All"||v.id===parseInt(filterVehicle)).map(v => {
-              const vf = fuels.filter(f=>f.vehicle_id===v.id).sort((a,b)=>new Date(b.date)-new Date(a.date));
-              if (!vf.length) return null;
-              return (
-                <div key={v.id} style={{ marginBottom:20 }}>
-                  <div style={{ fontSize:13, color:v.color, fontWeight:700, marginBottom:10 }}>🚘 {v.name}</div>
-                  <div style={{ background:CARD, borderRadius:14, padding:14, border:`1px solid ${BORDER}`, marginBottom:10 }}><FuelChart data={vf}/></div>
-                  {vf.map(f=><FuelCard key={f.id} f={f}/>)}
+
+            {filterVehicle==="All" ? (
+              <div>
+                {/* Quick comparison: every vehicle is visible before the logs. */}
+                <SecTitle t="Fuel Overview"/>
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:"repeat(2, minmax(0, 1fr))",
+                  gap:10,
+                  marginBottom:22
+                }}>
+                  {vehicles.map(v => {
+                    const vf = fuels
+                      .filter(f=>f.vehicle_id===v.id)
+                      .sort((a,b)=>new Date(b.date)-new Date(a.date));
+                    if (!vf.length) return null;
+                    return <FuelOverviewCard key={v.id} vehicle={v} data={vf}/>;
+                  })}
                 </div>
-              );
-            })}
+
+                {/* Complete fuel history, grouped by vehicle. */}
+                <SecTitle t="Fuel Log"/>
+                {vehicles.map(v => {
+                  const vf = fuels
+                    .filter(f=>f.vehicle_id===v.id)
+                    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+                  if (!vf.length) return null;
+
+                  return (
+                    <div key={v.id} style={{ marginBottom:18 }}>
+                      <div style={{
+                        fontSize:13,
+                        color:v.color,
+                        fontWeight:800,
+                        marginBottom:8
+                      }}>
+                        🚘 {v.name}
+                      </div>
+                      {vf.map(f=><FuelCard key={f.id} f={f}/>)}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              vehicles
+                .filter(v=>v.id===parseInt(filterVehicle))
+                .map(v => {
+                  const vf = fuels
+                    .filter(f=>f.vehicle_id===v.id)
+                    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+                  if (!vf.length) return null;
+
+                  return (
+                    <div key={v.id} style={{ marginBottom:20 }}>
+                      <div style={{
+                        fontSize:13,
+                        color:v.color,
+                        fontWeight:700,
+                        marginBottom:10
+                      }}>
+                        🚘 {v.name}
+                      </div>
+                      <div style={{
+                        background:CARD,
+                        borderRadius:14,
+                        padding:14,
+                        border:`1px solid ${BORDER}`,
+                        marginBottom:10
+                      }}>
+                        <FuelChart data={vf}/>
+                      </div>
+                      <FuelRangeCard data={vf}/>
+                      {vf.map(f=><FuelCard key={f.id} f={f}/>)}
+                    </div>
+                  );
+                })
+            )}
           </div>
         )}
 
@@ -1731,7 +2286,7 @@ export default function App() {
         {tabBtn("dashboard", "🏠", "Home")}
         {tabBtn("history",   "🔧", "Services")}
         {tabBtn("fuel",      "⛽", "Fuel")}
-        {tabBtn("reminders", "🔔", "Alerts")}
+        {tabBtn("reminders", "🔔", "Reminders")}
         {tabBtn("settings",  "⚙️", "Settings")}
       </div>
 
