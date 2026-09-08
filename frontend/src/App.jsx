@@ -1406,8 +1406,8 @@ export default function App() {
         alignItems:"center",
         justifyContent:"center",
         gap:5,
-        padding:"12px 0",
-        minHeight:76,
+        padding:"14px 0",
+        minHeight:88,
         flex:1,
         background:"none",
         border:"none",
@@ -1417,8 +1417,8 @@ export default function App() {
         transition:"all 0.2s"
       }}
     >
-      <span style={{ fontSize:23, lineHeight:1 }}>{icon}</span>
-      <span style={{ fontSize:12, fontWeight:600 }}>{label}</span>
+      <span style={{ fontSize:26, lineHeight:1 }}>{icon}</span>
+      <span style={{ fontSize:13, fontWeight:700 }}>{label}</span>
     </button>
   );
 
@@ -1587,10 +1587,10 @@ export default function App() {
   );
 
   return (
-    <div style={{ background:BG, minHeight:"100vh", fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
+    <div style={{ background:BG, minHeight:"100vh", width:"100%", maxWidth:"none", margin:0, fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column" }}>
 
       {/* Header */}
-      <div style={{ background:SURF, borderBottom:`1px solid ${BORDER}`, padding:"20px 20px", minHeight:76, display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100 }}>
+      <div style={{ background:SURF, borderBottom:`1px solid ${BORDER}`, padding:"24px 24px", minHeight:96, width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100 }}>
         <div>
           <div style={{ fontSize:11, color:MUTED, fontWeight:600, letterSpacing:"0.1em", textTransform:"uppercase" }}>AutoCare</div>
           <div style={{ fontSize:20, fontWeight:800, lineHeight:1.2 }}>My Fleet</div>
@@ -1602,7 +1602,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ flex:1, overflowY:"auto", padding:"16px 16px 96px" }}>
+      <div style={{ flex:1, width:"100%", overflowY:"auto", padding:"20px 20px 112px" }}>
 
         {/* ── DASHBOARD ── */}
         {tab==="dashboard" && (
@@ -2282,7 +2282,7 @@ export default function App() {
       </div>
 
       {/* Bottom Nav */}
-      <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:SURF, borderTop:`1px solid ${BORDER}`, display:"flex", zIndex:200 }}>
+      <div style={{ position:"fixed", bottom:0, left:0, transform:"none", width:"100%", maxWidth:"none", minHeight:88, paddingBottom:"env(safe-area-inset-bottom, 0px)", background:SURF, borderTop:`1px solid ${BORDER}`, display:"flex", zIndex:200 }}>
         {tabBtn("dashboard", "🏠", "Home")}
         {tabBtn("history",   "🔧", "Services")}
         {tabBtn("fuel",      "⛽", "Fuel")}
