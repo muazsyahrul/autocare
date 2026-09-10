@@ -310,6 +310,16 @@ function calculateFuelIntervals(data) {
   return intervals;
 }
 
+
+function getRecentFuelConsumptionAverage(data, count=3) {
+  const intervals = calculateFuelIntervals(data);
+  if (!intervals.length) return null;
+
+  const recent = intervals.slice(-count);
+  return recent.reduce((sum, item) => sum + item.eff, 0) / recent.length;
+}
+
+
 // ─── Fuel Efficiency Trend ────────────────────────────────────────────────────
 function FuelChart({ data }) {
   if (data.length < 2) {
@@ -581,6 +591,124 @@ function FuelChart({ data }) {
   );
 }
 
+// ─── Fuel Consumption List ────────────────────────────────────────────────────
+function FuelConsumptionList({ data }) {
+  const intervals = [...calculateFuelIntervals(data)].reverse();
+
+  if (!intervals.length) {
+    return (
+      <div style={{
+        marginTop:12,
+        background:BG,
+        borderRadius:10,
+        padding:14,
+        border:`1px solid ${BORDER}`,
+        color:MUTED,
+        fontSize:13
+      }}>
+        No valid full-to-full fuel consumption records yet.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      marginTop:12,
+      background:BG,
+      borderRadius:10,
+      padding:"4px 12px 10px",
+      border:`1px solid ${BORDER}`
+    }}>
+      <div style={{
+        display:"flex",
+        justifyContent:"space-between",
+        alignItems:"center",
+        gap:10,
+        padding:"10px 0 8px",
+        borderBottom:`1px solid ${BORDER}`
+      }}>
+        <div style={{
+          color:ACCENT,
+          fontSize:12,
+          fontWeight:800,
+          textTransform:"uppercase",
+          letterSpacing:"0.06em"
+        }}>
+          Fuel Consumption
+        </div>
+        <div style={{ color:MUTED, fontSize:10 }}>
+          {intervals.length} interval{intervals.length !== 1 ? "s" : ""}
+        </div>
+      </div>
+
+      {intervals.map((interval, index) => (
+        <div
+          key={`${interval.date}-${index}`}
+          style={{
+            padding:"11px 0",
+            borderBottom:index === intervals.length - 1 ? "none" : `1px solid ${BORDER}`
+          }}
+        >
+          <div style={{
+            display:"flex",
+            justifyContent:"space-between",
+            alignItems:"center",
+            gap:10
+          }}>
+            <div style={{ minWidth:0 }}>
+              <div style={{
+                fontSize:12,
+                color:MUTED,
+                fontWeight:700
+              }}>
+                {formatDisplayDate(interval.date)}
+              </div>
+              <div style={{
+                fontSize:11,
+                color:SUBTLE,
+                marginTop:3
+              }}>
+                {interval.distance.toLocaleString()} KM · {interval.liters.toFixed(2)} L
+              </div>
+            </div>
+
+            <div style={{
+              textAlign:"right",
+              flexShrink:0
+            }}>
+              <div style={{
+                color:ACCENT,
+                fontSize:16,
+                fontWeight:900
+              }}>
+                {interval.eff.toFixed(1)} KM/L
+              </div>
+              <div style={{
+                color:MUTED,
+                fontSize:10,
+                marginTop:2
+              }}>
+                Full → Full
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div style={{
+        color:MUTED,
+        fontSize:10,
+        lineHeight:1.5,
+        paddingTop:8
+      }}>
+        Each interval runs from one full tank to the next. Fuel added at partial
+        fill-ups between those full tanks is included in the interval litres.
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Estimated Empty Fuel ────────────────────────────────────────────────────
 function FuelRangeCard({ data }) {
   if (!data.length) return null;
@@ -594,11 +722,8 @@ function FuelRangeCard({ data }) {
   const liters = Number(latest?.liters) || 0;
   const odo = Number(latest?.odometer) || 0;
 
-  // Use the same arithmetic average shown in the fuel chart.
-  const effs = calculateFuelIntervals(data);
-  const avg = effs.length
-    ? effs.reduce((sum, e) => sum + e.eff, 0) / effs.length
-    : 0;
+  // Use only the latest 3 valid consumption intervals (or fewer if needed).
+  const avg = getRecentFuelConsumptionAverage(data, 3) || 0;
 
   if (!liters || !odo || !avg) {
     return (
@@ -713,6 +838,9 @@ function FuelRangeCard({ data }) {
           <div style={{ color:MUTED }}>
             {liters.toFixed(1)} L × {avg.toFixed(1)} KM/L
           </div>
+          <div style={{ color:"#64748b", fontSize:10, marginTop:2 }}>
+            Avg. latest 3 consumption intervals
+          </div>
         </div>
       </div>
     </div>
@@ -730,10 +858,8 @@ function FuelOverviewCard({ vehicle, data }) {
   const liters = Number(latest?.liters) || 0;
   const odo = Number(latest?.odometer) || 0;
 
-  const effs = calculateFuelIntervals(data);
-  const avg = effs.length
-    ? effs.reduce((sum, e) => sum + e.eff, 0) / effs.length
-    : 0;
+  // Use only the latest 3 valid consumption intervals for the estimate.
+  const avg = getRecentFuelConsumptionAverage(data, 3) || 0;
 
   const range = liters && avg ? liters * avg : 0;
   const emptyOdo = odo && range ? odo + range : 0;
@@ -915,6 +1041,7 @@ export default function App() {
   const [settings,        setSettings]        = useState({ fuel_price_per_l:"2.24" });
   const [loading,         setLoading]         = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [showFuelConsumption, setShowFuelConsumption] = useState(false);
   const [modal,           setModal]           = useState(null);
   const [editTarget,      setEditTarget]      = useState(null);
   const [filterType,      setFilterType]      = useState("All");
@@ -1406,8 +1533,8 @@ export default function App() {
         alignItems:"center",
         justifyContent:"center",
         gap:5,
-        padding:"14px 0",
-        minHeight:88,
+        padding:"12px 0",
+        minHeight:76,
         flex:1,
         background:"none",
         border:"none",
@@ -1417,8 +1544,8 @@ export default function App() {
         transition:"all 0.2s"
       }}
     >
-      <span style={{ fontSize:26, lineHeight:1 }}>{icon}</span>
-      <span style={{ fontSize:13, fontWeight:700 }}>{label}</span>
+      <span style={{ fontSize:23, lineHeight:1 }}>{icon}</span>
+      <span style={{ fontSize:12, fontWeight:600 }}>{label}</span>
     </button>
   );
 
@@ -1587,10 +1714,23 @@ export default function App() {
   );
 
   return (
-    <div style={{ background:BG, minHeight:"100vh", width:"100%", maxWidth:"none", margin:0, fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column" }}>
+    <div style={{ background:BG, minHeight:"100vh", width:"100%", fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column", maxWidth:1100, margin:"0 auto", boxShadow:"0 0 40px rgba(0,0,0,0.18)" }}>
+
+      <style>{`
+        @media (max-width: 600px) {
+          .autocare-content {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          .autocare-header {
+            padding-left: 20px !important;
+            padding-right: 20px !important;
+          }
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{ background:SURF, borderBottom:`1px solid ${BORDER}`, padding:"24px 24px", minHeight:96, width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100 }}>
+      <div className="autocare-header" style={{ background:SURF, borderBottom:`1px solid ${BORDER}`, padding:"20px 24px", minHeight:76, display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:100 }}>
         <div>
           <div style={{ fontSize:11, color:MUTED, fontWeight:600, letterSpacing:"0.1em", textTransform:"uppercase" }}>AutoCare</div>
           <div style={{ fontSize:20, fontWeight:800, lineHeight:1.2 }}>My Fleet</div>
@@ -1602,7 +1742,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ flex:1, width:"100%", overflowY:"auto", padding:"20px 20px 112px" }}>
+      <div className="autocare-content" style={{ flex:1, overflowY:"auto", padding:"16px 24px 96px" }}>
 
         {/* ── DASHBOARD ── */}
         {tab==="dashboard" && (
@@ -1656,7 +1796,7 @@ export default function App() {
                 }).length;
 
                 return (
-                  <div key={v.id} onClick={()=>{ setSelectedVehicle(v.id); setTab("vehicle-detail"); }}
+                  <div key={v.id} onClick={()=>{ setSelectedVehicle(v.id); setShowFuelConsumption(false); setTab("vehicle-detail"); }}
                     style={{ background:CARD, borderRadius:14, padding:"14px 16px", border:`1px solid ${BORDER}`, cursor:"pointer", display:"flex", alignItems:"center", gap:14 }}>
                     <div style={{ width:48, height:48, borderRadius:12, background:v.color+"22", border:`2px solid ${v.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🚘</div>
                     <div style={{ flex:1, minWidth:0 }}>
@@ -1722,9 +1862,50 @@ export default function App() {
                   <div style={{ background:BG, borderRadius:10, padding:12 }}><div style={{ fontSize:11, color:MUTED, marginBottom:4 }}>FILL-UPS</div><div style={{ fontSize:22, fontWeight:800 }}>{vFuels.length}</div></div>
                 </div>
               </div>
-              <div style={{ background:CARD, borderRadius:14, padding:16, border:`1px solid ${BORDER}`, marginBottom:16 }}>
-                <SecTitle t="Fuel Efficiency Trend"/>
+              <div
+                onClick={() => setShowFuelConsumption(value => !value)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setShowFuelConsumption(value => !value);
+                  }
+                }}
+                style={{
+                  background:CARD,
+                  borderRadius:14,
+                  padding:16,
+                  border:`1px solid ${showFuelConsumption ? ACCENT + "66" : BORDER}`,
+                  marginBottom:16,
+                  cursor:"pointer",
+                  transition:"border-color 0.2s"
+                }}
+              >
+                <div style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"center",
+                  gap:10
+                }}>
+                  <div style={{ flex:1 }}>
+                    <SecTitle t="Fuel Efficiency Trend"/>
+                  </div>
+                  <div style={{
+                    color:ACCENT,
+                    fontSize:11,
+                    fontWeight:800,
+                    whiteSpace:"nowrap"
+                  }}>
+                    {showFuelConsumption ? "Hide List ↑" : "View Consumption ↓"}
+                  </div>
+                </div>
+
                 <FuelChart data={vFuels}/>
+
+                {showFuelConsumption && (
+                  <FuelConsumptionList data={vFuels}/>
+                )}
               </div>
 
               <FuelRangeCard data={vFuels}/>
@@ -2282,7 +2463,7 @@ export default function App() {
       </div>
 
       {/* Bottom Nav */}
-      <div style={{ position:"fixed", bottom:0, left:0, transform:"none", width:"100%", maxWidth:"none", minHeight:88, paddingBottom:"env(safe-area-inset-bottom, 0px)", background:SURF, borderTop:`1px solid ${BORDER}`, display:"flex", zIndex:200 }}>
+      <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:1100, background:SURF, borderTop:`1px solid ${BORDER}`, display:"flex", zIndex:200 }}>
         {tabBtn("dashboard", "🏠", "Home")}
         {tabBtn("history",   "🔧", "Services")}
         {tabBtn("fuel",      "⛽", "Fuel")}
