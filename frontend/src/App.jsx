@@ -51,7 +51,7 @@ const IS = {
 function Modal({ title, onClose, children }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:CARD, border:`1px solid #334155`, borderRadius:16, width:"100%", maxWidth:480, maxHeight:"90vh", overflowY:"auto", padding:24 }}>
+      <div style={{ background:CARD, border:`1px solid #334155`, borderRadius:16, width:"100%", maxWidth:1100, maxHeight:"90vh", overflowY:"auto", padding:24 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
           <h2 style={{ color:TEXT, fontSize:18, fontWeight:700, margin:0 }}>{title}</h2>
           <button onClick={onClose} style={{ background:"none", border:"none", color:MUTED, fontSize:24, cursor:"pointer", lineHeight:1 }}>×</button>
@@ -337,8 +337,8 @@ function FuelChart({ data }) {
     );
   }
 
-  const effs = calculateFuelIntervals(data);
-  if (!effs.length) {
+  const allEffs = calculateFuelIntervals(data);
+  if (!allEffs.length) {
     return (
       <div style={{
         background:BG,
@@ -353,26 +353,25 @@ function FuelChart({ data }) {
     );
   }
 
-  // Average of each full-to-full interval.
-  // Keep the same calculation used by the original app.
+  // Display and average the latest 10 valid consumption intervals.
+  const effs = allEffs.slice(-10);
   const avg = effs.reduce((sum, e) => sum + e.eff, 0) / effs.length;
 
   const values = effs.map(e => e.eff);
   const minRaw = Math.min(...values);
   const maxRaw = Math.max(...values);
-
-  // Give the chart some breathing room so points do not sit on the border.
   const spread = Math.max(maxRaw - minRaw, 1);
-  const minE = Math.max(0, Math.floor((minRaw - spread * 0.18) * 2) / 2);
-  const maxE = Math.ceil((maxRaw + spread * 0.18) * 2) / 2;
+
+  const minE = Math.max(0, Math.floor((minRaw - spread * 0.20) * 2) / 2);
+  const maxE = Math.ceil((maxRaw + spread * 0.20) * 2) / 2;
   const range = Math.max(maxE - minE, 1);
 
-  const W = 420;
-  const H = 190;
-  const left = 42;
-  const right = 14;
-  const top = 18;
-  const bottom = 30;
+  const W = 720;
+  const H = 250;
+  const left = 48;
+  const right = 20;
+  const top = 28;
+  const bottom = 42;
   const chartW = W - left - right;
   const chartH = H - top - bottom;
 
@@ -393,19 +392,23 @@ function FuelChart({ data }) {
     maxE - (range / gridCount) * i
   );
 
-  const labelStep = effs.length <= 8
-    ? 1
-    : Math.ceil(effs.length / 6);
+  const formatShortDate = value => {
+    if (!value) return "";
+    const d = new Date(`${value}T00:00:00`);
+    return d.toLocaleDateString("en-GB", {
+      day:"2-digit",
+      month:"2-digit"
+    });
+  };
 
   return (
     <div>
-      {/* Prominent average */}
       <div style={{
         display:"flex",
         alignItems:"flex-end",
         justifyContent:"space-between",
         gap:12,
-        marginBottom:12
+        marginBottom:14
       }}>
         <div>
           <div style={{
@@ -416,21 +419,27 @@ function FuelChart({ data }) {
             letterSpacing:"0.08em",
             marginBottom:3
           }}>
-            Average Consumption
+            Average of latest {effs.length} fuel consumption
           </div>
+
           <div style={{
-            fontSize:34,
-            lineHeight:1,
-            fontWeight:900,
-            color:ACCENT,
-            letterSpacing:"-0.03em"
+            display:"flex",
+            alignItems:"baseline",
+            gap:6
           }}>
-            {avg.toFixed(1)}
+            <span style={{
+              fontSize:40,
+              lineHeight:1,
+              fontWeight:900,
+              color:ACCENT,
+              letterSpacing:"-0.04em"
+            }}>
+              {avg.toFixed(1)}
+            </span>
             <span style={{
               fontSize:15,
               fontWeight:700,
-              color:SUBTLE,
-              marginLeft:5
+              color:SUBTLE
             }}>
               KM/L
             </span>
@@ -438,54 +447,55 @@ function FuelChart({ data }) {
         </div>
 
         <div style={{
+          textAlign:"right",
           color:MUTED,
           fontSize:11,
-          textAlign:"right",
-          lineHeight:1.4
+          lineHeight:1.45
         }}>
-          {effs.length} measured<br />
-          full-to-full intervals
+          Latest {effs.length} intervals<br />
+          <span style={{color:ACCENT,fontWeight:700}}>
+            {allEffs.length} total measured
+          </span>
         </div>
       </div>
 
-      {/* Responsive chart */}
       <div style={{
-        width:"100%",
-        overflowX:"auto",
-        overflowY:"hidden",
-        paddingBottom:2
+        background:BG,
+        border:`1px solid ${BORDER}`,
+        borderRadius:12,
+        padding:"10px 8px 2px",
+        overflow:"hidden"
       }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           width="100%"
-          height="190"
+          height="250"
           preserveAspectRatio="none"
-          style={{ display:"block", minWidth:280 }}
+          style={{display:"block"}}
         >
           <defs>
             <linearGradient id="fuelTrendGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.30"/>
-              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.02"/>
+              <stop offset="0%" stopColor={ACCENT} stopOpacity="0.28"/>
+              <stop offset="100%" stopColor={ACCENT} stopOpacity="0.025"/>
             </linearGradient>
           </defs>
 
-          {/* Grid + Y labels */}
           {gridValues.map((value, i) => {
             const gy = y(value);
             return (
-              <g key={i}>
+              <g key={`grid-${i}`}>
                 <line
                   x1={left}
                   y1={gy}
-                  x2={W - right}
+                  x2={W-right}
                   y2={gy}
                   stroke={BORDER}
                   strokeWidth="1"
-                  strokeDasharray={i === gridCount ? "0" : "4 5"}
+                  strokeDasharray={i === gridCount ? "0" : "5 7"}
                 />
                 <text
-                  x={left - 7}
-                  y={gy + 4}
+                  x={left-9}
+                  y={gy+4}
                   textAnchor="end"
                   fill={SUBTLE}
                   fontSize="10"
@@ -496,100 +506,99 @@ function FuelChart({ data }) {
             );
           })}
 
-          {/* Filled area */}
           <path d={areaD} fill="url(#fuelTrendGradient)" />
 
-          {/* Average line */}
           <line
             x1={left}
             y1={y(avg)}
-            x2={W - right}
+            x2={W-right}
             y2={y(avg)}
             stroke={ACCENT}
-            strokeOpacity="0.35"
-            strokeWidth="1"
-            strokeDasharray="5 5"
+            strokeOpacity="0.45"
+            strokeWidth="1.5"
+            strokeDasharray="7 6"
           />
 
-          {/* Trend line */}
           <path
             d={pathD}
             fill="none"
             stroke={ACCENT}
-            strokeWidth="3"
+            strokeWidth="4"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
 
-          {/* Points */}
           {effs.map((e, i) => (
-            <g key={i}>
+            <g key={`${e.date}-${i}`}>
               <circle
                 cx={x(i)}
                 cy={y(e.eff)}
-                r="5"
+                r="7"
                 fill={CARD}
                 stroke={ACCENT}
-                strokeWidth="2.5"
+                strokeWidth="3"
               />
-              {effs.length <= 12 && (
-                <text
-                  x={x(i)}
-                  y={Math.max(12, y(e.eff) - 9)}
-                  textAnchor="middle"
-                  fill={TEXT}
-                  fontSize="10"
-                  fontWeight="700"
-                >
-                  {e.eff.toFixed(1)}
-                </text>
-              )}
+              <circle
+                cx={x(i)}
+                cy={y(e.eff)}
+                r="2.5"
+                fill={ACCENT}
+              />
+
+              <text
+                x={x(i)}
+                y={Math.max(15, y(e.eff)-14)}
+                textAnchor="middle"
+                fill={TEXT}
+                fontSize="10"
+                fontWeight="800"
+              >
+                {e.eff.toFixed(1)}
+              </text>
+
+              <text
+                x={x(i)}
+                y={H-13}
+                textAnchor="middle"
+                fill={SUBTLE}
+                fontSize="10"
+              >
+                {formatShortDate(e.date)}
+              </text>
             </g>
           ))}
 
-          {/* X labels */}
-          {effs.map((e, i) => {
-            if (i % labelStep !== 0 && i !== effs.length - 1) return null;
-            const label = e.date
-              ? new Date(`${e.date}T00:00:00`).toLocaleDateString("en-GB", {
-                  day:"2-digit",
-                  month:"2-digit"
-                })
-              : "";
-            return (
-              <text
-                key={`label-${i}`}
-                x={x(i)}
-                y={H - 8}
-                textAnchor="middle"
-                fill={SUBTLE}
-                fontSize="9"
-              >
-                {label}
-              </text>
-            );
-          })}
+          <text
+            x={W-right}
+            y={y(avg)-8}
+            textAnchor="end"
+            fill={ACCENT}
+            fontSize="10"
+            fontWeight="800"
+          >
+            AVG {avg.toFixed(1)}
+          </text>
         </svg>
       </div>
 
       <div style={{
         display:"flex",
         justifyContent:"space-between",
+        alignItems:"center",
         gap:10,
-        marginTop:8,
-        paddingTop:9,
-        borderTop:`1px solid ${BORDER}`,
+        marginTop:9,
         color:MUTED,
         fontSize:11
       }}>
         <span>Lower KM/L = higher fuel use</span>
-        <span style={{ color:ACCENT, fontWeight:700 }}>
-          Latest: {effs[effs.length - 1].eff.toFixed(1)} KM/L
+        <span style={{color:ACCENT,fontWeight:800}}>
+          Latest: {effs[effs.length-1].eff.toFixed(1)} KM/L
         </span>
       </div>
     </div>
   );
 }
+
 
 // ─── Fuel Consumption Modal ────────────────────────────────────────────────────
 function FuelConsumptionModal({ data, onClose }) {
@@ -775,8 +784,8 @@ function FuelRangeCard({ data }) {
   const liters = Number(latest?.liters) || 0;
   const odo = Number(latest?.odometer) || 0;
 
-  // Use only the latest 3 valid consumption intervals (or fewer if needed).
-  const avg = getRecentFuelConsumptionAverage(data, 3) || 0;
+  // Use only the latest 10 valid consumption intervals (or fewer if needed).
+  const avg = getRecentFuelConsumptionAverage(data, 10) || 0;
 
   if (!liters || !odo || !avg) {
     return (
@@ -892,7 +901,7 @@ function FuelRangeCard({ data }) {
             {liters.toFixed(1)} L × {avg.toFixed(1)} KM/L
           </div>
           <div style={{ color:"#64748b", fontSize:10, marginTop:2 }}>
-            Avg. latest 3 consumption intervals
+            Avg. latest 10 consumption intervals
           </div>
         </div>
       </div>
@@ -911,8 +920,8 @@ function FuelOverviewCard({ vehicle, data }) {
   const liters = Number(latest?.liters) || 0;
   const odo = Number(latest?.odometer) || 0;
 
-  // Use only the latest 3 valid consumption intervals for the estimate.
-  const avg = getRecentFuelConsumptionAverage(data, 3) || 0;
+  // Use only the latest 10 valid consumption intervals for the estimate.
+  const avg = getRecentFuelConsumptionAverage(data, 10) || 0;
 
   const range = liters && avg ? liters * avg : 0;
   const emptyOdo = odo && range ? odo + range : 0;
@@ -1095,6 +1104,7 @@ export default function App() {
   const [loading,         setLoading]         = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [showFuelConsumption, setShowFuelConsumption] = useState(false);
+  const [fuelConsumptionData, setFuelConsumptionData] = useState([]);
   const [modal,           setModal]           = useState(null);
   const [editTarget,      setEditTarget]      = useState(null);
   const [filterType,      setFilterType]      = useState("All");
@@ -1935,7 +1945,7 @@ export default function App() {
               }}>
                 <button
                   type="button"
-                  onClick={() => setShowFuelConsumption(true)}
+                  onClick={() => { setFuelConsumptionData(vFuels); setShowFuelConsumption(true); }}
                   style={{
                     width:"100%",
                     background:"transparent",
@@ -1974,7 +1984,7 @@ export default function App() {
 
               {showFuelConsumption && (
                 <FuelConsumptionModal
-                  data={vFuels}
+                  data={fuelConsumptionData}
                   onClose={() => setShowFuelConsumption(false)}
                 />
               )}
@@ -2171,12 +2181,39 @@ export default function App() {
                   return (
                     <div key={v.id} style={{ marginBottom:18 }}>
                       <div style={{
-                        fontSize:13,
-                        color:v.color,
-                        fontWeight:800,
+                        display:"flex",
+                        alignItems:"center",
+                        justifyContent:"space-between",
+                        gap:10,
                         marginBottom:8
                       }}>
-                        🚘 {v.name}
+                        <div style={{
+                          fontSize:13,
+                          color:v.color,
+                          fontWeight:800
+                        }}>
+                          🚘 {v.name}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFuelConsumptionData(vf);
+                            setShowFuelConsumption(true);
+                          }}
+                          style={{
+                            background:ACCENT+"18",
+                            border:`1px solid ${ACCENT}55`,
+                            color:ACCENT,
+                            borderRadius:8,
+                            padding:"6px 9px",
+                            cursor:"pointer",
+                            fontSize:10,
+                            fontWeight:800
+                          }}
+                        >
+                          Consumption →
+                        </button>
                       </div>
                       {vf.map(f=><FuelCard key={f.id} f={f}/>)}
                     </div>
@@ -2210,12 +2247,40 @@ export default function App() {
                         marginBottom:10
                       }}>
                         <FuelChart data={vf}/>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFuelConsumptionData(vf);
+                            setShowFuelConsumption(true);
+                          }}
+                          style={{
+                            width:"100%",
+                            marginTop:12,
+                            background:ACCENT+"18",
+                            border:`1px solid ${ACCENT}66`,
+                            color:ACCENT,
+                            borderRadius:10,
+                            padding:"11px 12px",
+                            cursor:"pointer",
+                            fontSize:12,
+                            fontWeight:800
+                          }}
+                        >
+                          View Fuel Consumption List →
+                        </button>
                       </div>
                       <FuelRangeCard data={vf}/>
                       {vf.map(f=><FuelCard key={f.id} f={f}/>)}
                     </div>
                   );
                 })
+            )}
+
+            {showFuelConsumption && (
+              <FuelConsumptionModal
+                data={fuelConsumptionData}
+                onClose={() => setShowFuelConsumption(false)}
+              />
             )}
           </div>
         )}
