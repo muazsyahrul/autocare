@@ -591,118 +591,171 @@ function FuelChart({ data }) {
   );
 }
 
-// ─── Fuel Consumption List ────────────────────────────────────────────────────
-function FuelConsumptionList({ data }) {
+// ─── Fuel Consumption Modal ────────────────────────────────────────────────────
+function FuelConsumptionModal({ data, onClose }) {
   const intervals = [...calculateFuelIntervals(data)].reverse();
 
-  if (!intervals.length) {
-    return (
-      <div style={{
-        marginTop:12,
-        background:BG,
-        borderRadius:10,
-        padding:14,
-        border:`1px solid ${BORDER}`,
-        color:MUTED,
-        fontSize:13
-      }}>
-        No valid full-to-full fuel consumption records yet.
-      </div>
-    );
-  }
-
   return (
-    <div style={{
-      marginTop:12,
-      background:BG,
-      borderRadius:10,
-      padding:"4px 12px 10px",
-      border:`1px solid ${BORDER}`
-    }}>
-      <div style={{
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        zIndex:1000,
+        background:"rgba(2,6,23,0.78)",
         display:"flex",
-        justifyContent:"space-between",
         alignItems:"center",
-        gap:10,
-        padding:"10px 0 8px",
-        borderBottom:`1px solid ${BORDER}`
-      }}>
+        justifyContent:"center",
+        padding:16
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width:"100%",
+          maxWidth:760,
+          maxHeight:"88vh",
+          overflowY:"auto",
+          background:CARD,
+          border:`1px solid ${BORDER}`,
+          borderRadius:16,
+          boxShadow:"0 20px 60px rgba(0,0,0,0.45)",
+          padding:18
+        }}
+      >
         <div style={{
-          color:ACCENT,
-          fontSize:12,
-          fontWeight:800,
-          textTransform:"uppercase",
-          letterSpacing:"0.06em"
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"space-between",
+          gap:12,
+          marginBottom:14
         }}>
-          Fuel Consumption
-        </div>
-        <div style={{ color:MUTED, fontSize:10 }}>
-          {intervals.length} interval{intervals.length !== 1 ? "s" : ""}
-        </div>
-      </div>
+          <div>
+            <div style={{
+              color:ACCENT,
+              fontSize:12,
+              fontWeight:800,
+              textTransform:"uppercase",
+              letterSpacing:"0.07em"
+            }}>
+              Fuel Consumption
+            </div>
+            <div style={{
+              color:MUTED,
+              fontSize:11,
+              marginTop:3
+            }}>
+              Full-to-full consumption intervals
+            </div>
+          </div>
 
-      {intervals.map((interval, index) => (
-        <div
-          key={`${interval.date}-${index}`}
-          style={{
-            padding:"11px 0",
-            borderBottom:index === intervals.length - 1 ? "none" : `1px solid ${BORDER}`
-          }}
-        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background:BG,
+              border:`1px solid ${BORDER}`,
+              color:TEXT,
+              borderRadius:9,
+              padding:"8px 12px",
+              cursor:"pointer",
+              fontSize:12,
+              fontWeight:800
+            }}
+          >
+            Close
+          </button>
+        </div>
+
+        {!intervals.length ? (
           <div style={{
-            display:"flex",
-            justifyContent:"space-between",
-            alignItems:"center",
-            gap:10
+            background:BG,
+            border:`1px solid ${BORDER}`,
+            borderRadius:12,
+            padding:18,
+            color:MUTED,
+            fontSize:13,
+            textAlign:"center"
           }}>
-            <div style={{ minWidth:0 }}>
-              <div style={{
-                fontSize:12,
-                color:MUTED,
-                fontWeight:700
-              }}>
-                {formatDisplayDate(interval.date)}
-              </div>
-              <div style={{
-                fontSize:11,
-                color:SUBTLE,
-                marginTop:3
-              }}>
-                {interval.distance.toLocaleString()} KM · {interval.liters.toFixed(2)} L
-              </div>
+            No valid full-to-full fuel consumption records yet.
+          </div>
+        ) : (
+          <>
+            <div style={{
+              display:"flex",
+              flexDirection:"column",
+              gap:8
+            }}>
+              {intervals.map((interval, index) => (
+                <div
+                  key={`${interval.date}-${interval.distance}-${index}`}
+                  style={{
+                    background:BG,
+                    border:`1px solid ${BORDER}`,
+                    borderRadius:12,
+                    padding:"13px 14px"
+                  }}
+                >
+                  <div style={{
+                    display:"grid",
+                    gridTemplateColumns:"1fr auto",
+                    alignItems:"center",
+                    gap:14
+                  }}>
+                    <div>
+                      <div style={{
+                        color:TEXT,
+                        fontSize:13,
+                        fontWeight:800
+                      }}>
+                        {formatDisplayDate(interval.date)}
+                      </div>
+                      <div style={{
+                        color:MUTED,
+                        fontSize:11,
+                        marginTop:5
+                      }}>
+                        {interval.distance.toLocaleString()} KM
+                        {" · "}
+                        {interval.liters.toFixed(2)} L
+                      </div>
+                    </div>
+
+                    <div style={{
+                      textAlign:"right",
+                      minWidth:90
+                    }}>
+                      <div style={{
+                        color:ACCENT,
+                        fontSize:18,
+                        fontWeight:900
+                      }}>
+                        {interval.eff.toFixed(1)} KM/L
+                      </div>
+                      <div style={{
+                        color:MUTED,
+                        fontSize:10,
+                        marginTop:2
+                      }}>
+                        FULL → FULL
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div style={{
-              textAlign:"right",
-              flexShrink:0
+              color:MUTED,
+              fontSize:10,
+              lineHeight:1.5,
+              marginTop:12
             }}>
-              <div style={{
-                color:ACCENT,
-                fontSize:16,
-                fontWeight:900
-              }}>
-                {interval.eff.toFixed(1)} KM/L
-              </div>
-              <div style={{
-                color:MUTED,
-                fontSize:10,
-                marginTop:2
-              }}>
-                Full → Full
-              </div>
+              Partial fill-ups between two full tanks are included in the litres
+              used for that full-to-full interval.
             </div>
-          </div>
-        </div>
-      ))}
-
-      <div style={{
-        color:MUTED,
-        fontSize:10,
-        lineHeight:1.5,
-        paddingTop:8
-      }}>
-        Each interval runs from one full tank to the next. Fuel added at partial
-        fill-ups between those full tanks is included in the interval litres.
+          </>
+        )}
       </div>
     </div>
   );
@@ -1714,7 +1767,18 @@ export default function App() {
   );
 
   return (
-    <div style={{ background:BG, minHeight:"100vh", width:"100%", fontFamily:"'DM Sans',system-ui,sans-serif", color:TEXT, display:"flex", flexDirection:"column", maxWidth:1100, margin:"0 auto", boxShadow:"0 0 40px rgba(0,0,0,0.18)" }}>
+    <div style={{
+      background:BG,
+      minHeight:"100vh",
+      width:"100%",
+      fontFamily:"'DM Sans',system-ui,sans-serif",
+      color:TEXT,
+      display:"flex",
+      flexDirection:"column",
+      maxWidth:1100,
+      margin:"0 auto",
+      boxShadow:"0 0 40px rgba(0,0,0,0.18)"
+    }}>
 
       <style>{`
         @media (max-width: 600px) {
@@ -1862,53 +1926,58 @@ export default function App() {
                   <div style={{ background:BG, borderRadius:10, padding:12 }}><div style={{ fontSize:11, color:MUTED, marginBottom:4 }}>FILL-UPS</div><div style={{ fontSize:22, fontWeight:800 }}>{vFuels.length}</div></div>
                 </div>
               </div>
-              <div
-                onClick={() => setShowFuelConsumption(value => !value)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setShowFuelConsumption(value => !value);
-                  }
-                }}
-                style={{
-                  background:CARD,
-                  borderRadius:14,
-                  padding:16,
-                  border:`1px solid ${showFuelConsumption ? ACCENT + "66" : BORDER}`,
-                  marginBottom:16,
-                  cursor:"pointer",
-                  transition:"border-color 0.2s"
-                }}
-              >
-                <div style={{
-                  display:"flex",
-                  justifyContent:"space-between",
-                  alignItems:"center",
-                  gap:10
-                }}>
-                  <div style={{ flex:1 }}>
-                    <SecTitle t="Fuel Efficiency Trend"/>
-                  </div>
+              <div style={{
+                background:CARD,
+                borderRadius:14,
+                padding:16,
+                border:`1px solid ${BORDER}`,
+                marginBottom:16
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowFuelConsumption(true)}
+                  style={{
+                    width:"100%",
+                    background:"transparent",
+                    border:"none",
+                    padding:0,
+                    margin:0,
+                    color:TEXT,
+                    textAlign:"left",
+                    cursor:"pointer"
+                  }}
+                >
                   <div style={{
-                    color:ACCENT,
-                    fontSize:11,
-                    fontWeight:800,
-                    whiteSpace:"nowrap"
+                    display:"flex",
+                    justifyContent:"space-between",
+                    alignItems:"center",
+                    gap:12
                   }}>
-                    {showFuelConsumption ? "Hide List ↑" : "View Consumption ↓"}
+                    <div style={{ flex:1 }}>
+                      <SecTitle t="Fuel Efficiency Trend"/>
+                    </div>
+                    <div style={{
+                      color:ACCENT,
+                      fontSize:11,
+                      fontWeight:800,
+                      whiteSpace:"nowrap"
+                    }}>
+                      VIEW LIST →
+                    </div>
                   </div>
-                </div>
 
-                <FuelChart data={vFuels}/>
-
-                {showFuelConsumption && (
-                  <FuelConsumptionList data={vFuels}/>
-                )}
+                  <FuelChart data={vFuels}/>
+                </button>
               </div>
 
               <FuelRangeCard data={vFuels}/>
+
+              {showFuelConsumption && (
+                <FuelConsumptionModal
+                  data={vFuels}
+                  onClose={() => setShowFuelConsumption(false)}
+                />
+              )}
 
               {/* Alerts for this vehicle */}
                {(() => {
